@@ -89,10 +89,10 @@ sketchybar --add item calendar right             \
              script="$PLUGIN_DIR/calendar.sh"    \                      \
              NAME=calendar
 
-# WiFi widget configuration
-sketchybar --add item wifi right                   \
-           --set wifi script="$PLUGIN_DIR/wifi.sh"  \
-                     update_freq=2                  \
+# # WiFi widget configuration
+# sketchybar --add item wifi right                   \
+#            --set wifi script="$PLUGIN_DIR/wifi.sh"  \
+#                      update_freq=2                  \
         
                     
 
