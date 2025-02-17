@@ -54,6 +54,14 @@ source $ITEM_DIR/spaces.sh
 source $ITEM_DIR/front_app.sh
 
 sketchybar -m --add item yabai_mode left \
+              --set yabai_mode \
+                label.drawing=off \
+                label.padding=0 \
+                width=40 \
+                icon.padding_left=0 \
+                icon.padding_right=0 \
+                icon.font="SF Pro:Semibold:18.0" \
+                align=center \
               --set yabai_mode update_freq=3 \
               --set yabai_mode script="~/.config/sketchybar/plugins/yabai_mode.sh" \
               --set yabai_mode click_script="~/.config/sketchybar/plugins/yabai_mode_click.sh" \
@@ -76,7 +84,7 @@ sketchybar --add item reload.bar right                                    \
            --set reload.bar                                               \
              icon=$RELOAD_ICON                                            \
              icon.padding_left=6                                          \
-             icon.padding_right=6                                         \
+             icon.padding_right=6                                        \
              icon.align=center                                           \
              align=center                                                \
              background.corner_radius=50 \
