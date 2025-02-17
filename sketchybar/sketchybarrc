@@ -81,6 +81,20 @@ sketchybar --add item calendar right             \
              script="$PLUGIN_DIR/calendar.sh"    \                      \
              NAME=calendar
 
+# WiFi widget configuration
+sketchybar --add item wifi right                   \
+           --set wifi script="$PLUGIN_DIR/wifi.sh"  \
+                     update_freq=2                  \
+                     icon.font="$FONT:Bold:16.0"    \
+                     icon.padding_right=4           \
+                     label.font="$FONT:Regular:12.0" \
+                     label.padding_right=8          \
+                     background.padding_left=2      \
+                     background.padding_right=2     \
+                     background.corner_radius=5     \
+                     icon.color=$WHITE              \
+                     label.color=$WHITE
+
 
 source $ITEM_DIR/volume.sh
 source $ITEM_DIR/cpu.sh

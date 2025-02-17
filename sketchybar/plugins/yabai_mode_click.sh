@@ -1,7 +1,7 @@
 #!/bin/bash
 
 source "$CONFIG_DIR/colors.sh"
-source "$CONFIG_DIR/yabai_icons.sh"
+source "$CONFIG_DIR/icons.sh"
 
 space_number=$(yabai -m query --spaces --space | jq -r .index)
 yabai_mode=$(yabai -m query --spaces --space | jq -r .type)

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 source "$CONFIG_DIR/colors.sh"
-source "$CONFIG_DIR/yabai_icons.sh"
+source "$CONFIG_DIR/icons.sh"
 
 case "$(yabai -m query --windows --window | jq .floating)" in
     0)
