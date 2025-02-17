@@ -1,6 +1,7 @@
 #!/bin/bash
 
 source "$CONFIG_DIR/colors.sh" # Loads all defined colors
+source "$CONFIG_DIR/icons.sh"  # Loads all defined icons
 
 # This is a demo config to showcase some of the most important commands.
 # It is meant to be changed and configured, as it is intentionally kept sparse.
@@ -19,6 +20,12 @@ ITEM_DIR="$CONFIG_DIR/items"
 
 sketchybar --bar position=top height=37 blur_radius=30 color=$BAR_COLOR
 
+# Calculate y_offset for vertical centering
+BAR_HEIGHT=37
+BACKGROUND_HEIGHT=26
+Y_OFFSET=1
+
+
 ##### Changing Defaults #####
 # We now change some default values, which are applied to all further items.
 # For a full list of all available item properties see:
@@ -27,13 +34,14 @@ sketchybar --bar position=top height=37 blur_radius=30 color=$BAR_COLOR
 default=(
   padding_left=5
   padding_right=5
-  icon.font="SF Pro:Semibold:15.0"
+  icon.font="SF Pro:Semibold:16.0"
   label.font="SF Pro:Semibold:15.0"
   icon.color=$WHITE
   label.color=$WHITE
   background.color=$ITEM_BG_COLOR
-  background.corner_radius=5
-  background.height=24
+  background.corner_radius=14
+  background.height=$BACKGROUND_HEIGHT
+  y_offset=$Y_OFFSET
   icon.padding_left=10
   icon.padding_right=4
   label.padding_left=4
@@ -51,7 +59,7 @@ sketchybar -m --add item yabai_mode left \
               --set yabai_mode click_script="~/.config/sketchybar/plugins/yabai_mode_click.sh" \
               --subscribe yabai_mode space_change
 
-sketchybar -m --add       item               yabai_float left                                                    \
+#sketchybar -m --add       item               yabai_float left                                                    \
               --add       event              window_focus                                                        \
               --add       event              float_change                                                        \
               --set       yabai_float        script="~/.config/sketchybar/plugins/yabai_float.sh"                \
@@ -85,16 +93,8 @@ sketchybar --add item calendar right             \
 sketchybar --add item wifi right                   \
            --set wifi script="$PLUGIN_DIR/wifi.sh"  \
                      update_freq=2                  \
-                     icon.font="$FONT:Bold:16.0"    \
-                     icon.padding_right=4           \
-                     label.font="$FONT:Regular:12.0" \
-                     label.padding_right=8          \
-                     background.padding_left=2      \
-                     background.padding_right=2     \
-                     background.corner_radius=5     \
-                     icon.color=$WHITE              \
-                     label.color=$WHITE
-
+        
+                    
 
 source $ITEM_DIR/volume.sh
 source $ITEM_DIR/cpu.sh
