@@ -2,6 +2,13 @@
 
 export WHITE=0xffffffff
 
+# -- Battery Health Colors --
+export BATTERY_FULL_COLOR=0xff6abd43  # Green
+export BATTERY_GOOD_COLOR=0xffafd235  # Light Green
+export BATTERY_MED_COLOR=0xffe8e71c   # Yellow
+export BATTERY_LOW_COLOR=0xfff7941c   # Orange
+export BATTERY_CRIT_COLOR=0xffee1924  # Red
+
 # -- Teal Scheme --
 #export BAR_COLOR=0xff001f30
 #export ITEM_BG_COLOR=0xff003547
@@ -13,9 +20,9 @@ export WHITE=0xffffffff
 # export ACCENT_COLOR=0xffffffff
 
 # -- Purple Scheme --
-export BAR_COLOR=0xff140c42
-export ITEM_BG_COLOR=0xff2b1c84
-export ACCENT_COLOR=0xffeb46f9
+#export BAR_COLOR=0xff140c42
+#export ITEM_BG_COLOR=0xff2b1c84
+#export ACCENT_COLOR=0xffeb46f9
 
 # -- Red Scheme ---
 # export BAR_COLOR=0xff23090e
@@ -34,9 +41,9 @@ export ACCENT_COLOR=0xffeb46f9
 
 
 # -- Orange Scheme --
-# export BAR_COLOR=0xff381c02
-# export ITEM_BG_COLOR=0xff99440a
-# export ACCENT_COLOR=0xfff97716
+export BAR_COLOR=0xff381c02
+export ITEM_BG_COLOR=0xff99440a
+export ACCENT_COLOR=0xfff97716
 
 # -- Yellow Scheme --
 # export BAR_COLOR=0xff2d2b02
