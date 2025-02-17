@@ -93,6 +93,9 @@ function __icon_map() {
    "Blender")
         icon_result=":blender:"
         ;;
+   "Blitzit")
+        icon_result=":blitzit:"
+        ;;
    "BluOS Controller")
         icon_result=":bluos_controller:"
         ;;

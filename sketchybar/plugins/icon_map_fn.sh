@@ -11,6 +11,9 @@ function icon_map() {
   "Figma")
     icon_result=":figma:"
     ;;
+  "Blitzit")
+    icon_result=":blitzit:"
+    ;;
   "Claude")
     icon_result=":claude:"
     ;;
