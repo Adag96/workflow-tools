@@ -14,6 +14,9 @@ function icon_map() {
   "Claude")
     icon_result=":claude:"
     ;;
+  "Capacities")
+    icon_result=":capacities:"
+    ;;
   "VMware Fusion")
     icon_result=":vmware_fusion:"
     ;;
