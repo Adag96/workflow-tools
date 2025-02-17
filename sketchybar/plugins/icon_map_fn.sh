@@ -1,12 +1,18 @@
 #!/bin/bash
 
 function icon_map() {
+  # Echo the exact input for debugging
+  echo "DEBUG: Received application name: '$1'" >> /tmp/icon_map_debug.log
+
   case "$1" in
   "Keynote" | "Keynote 讲演")
     icon_result=":keynote:"
     ;;
   "Figma")
     icon_result=":figma:"
+    ;;
+  "Claude")
+    icon_result=":claude:"
     ;;
   "VMware Fusion")
     icon_result=":vmware_fusion:"
@@ -22,6 +28,12 @@ function icon_map() {
     ;;
   "App Store")
     icon_result=":app_store:"
+    ;;
+  *"Premiere"* | *"Adobe Premiere"*)
+    icon_result=":premiere:"
+    ;;
+  *"Photoshop"* | *"Adobe Photoshop"*)
+    icon_result=":photoshop:"
     ;;
   "CleanMyMac X")
     icon_result=":desktop:"
@@ -429,6 +441,9 @@ function icon_map() {
     icon_result=":default:"
     ;;
   esac
+
+# Always log the result
+  echo "DEBUG: Mapped to icon: $icon_result" >> /tmp/icon_map_debug.log
 }
 
 icon_map "$1"
