@@ -3,9 +3,9 @@
 export WHITE=0xffffffff
 
 # -- Battery Health Colors --
-export BATTERY_FULL_COLOR=0xff6abd43  # Green
-export BATTERY_GOOD_COLOR=0xffafd235  # Light Green
-export BATTERY_MED_COLOR=0xffe8e71c   # Yellow
+export BATTERY_FULL_COLOR=0xffffffff  # White
+export BATTERY_GOOD_COLOR=0xffffffff  # White
+export BATTERY_MED_COLOR=0xffffffff   # White
 export BATTERY_LOW_COLOR=0xfff7941c   # Orange
 export BATTERY_CRIT_COLOR=0xffee1924  # Red
 
