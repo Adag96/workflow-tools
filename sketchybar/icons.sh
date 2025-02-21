@@ -17,6 +17,8 @@ export BATTERY_CHARGING="􀢋"
 
 # Sketchybar reload icon
 export RELOAD_ICON="􂣾"
+# Color scheme selector icon
+export SCHEME_ICON="􀏅"
 
 # WiFi widget icons
 WIFI_ICONS=(

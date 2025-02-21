@@ -1,7 +1,10 @@
 #!/bin/bash
 
+source "$HOME/.config/sketchybar/items/scheme.sh"
+get_colors "$(cat "$HOME/.cache/sketchybar/current_scheme")"
 source "$CONFIG_DIR/colors.sh" # Loads all defined colors
 source "$CONFIG_DIR/icons.sh"  # Loads all defined icons
+source "$CONFIG_DIR/fonts.sh"  # Loads all defined fonts
 
 # This is a demo config to showcase some of the most important commands.
 # It is meant to be changed and configured, as it is intentionally kept sparse.
@@ -34,11 +37,11 @@ Y_OFFSET=1
 default=(
   padding_left=5
   padding_right=5
-  icon.font="SF Pro:Semibold:16.0"
-  label.font="SF Pro:Semibold:15.0"
+  icon.font="$ICON_FONT:Semibold:16.0"
+  label.font="$TEXT_FONT:Semibold:15.0"
   icon.color=$WHITE
   label.color=$WHITE
-  background.color=$ITEM_BG_COLOR
+  background.color=$RIGHT_ITEM_COLOR
   background.corner_radius=12
   background.height=$BACKGROUND_HEIGHT
   y_offset=$Y_OFFSET
@@ -60,7 +63,7 @@ sketchybar -m --add item yabai_mode left \
                 width=40 \
                 icon.padding_left=0 \
                 icon.padding_right=0 \
-                icon.font="SF Pro:Semibold:18.0" \
+                icon.font="$ICON_FONT:Semibold:18.0" \
                 align=center \
               --set yabai_mode update_freq=3 \
               --set yabai_mode script="~/.config/sketchybar/plugins/yabai_mode.sh" \
@@ -83,6 +86,7 @@ sketchybar -m --add item yabai_mode left \
 sketchybar --add item reload.bar right                                    \
            --set reload.bar                                               \
              icon=$RELOAD_ICON                                            \
+             icon.color=$RIGHT_TEXT_COLOR \
              icon.padding_left=6                                          \
              icon.padding_right=6                                        \
              icon.align=center                                           \
@@ -93,19 +97,32 @@ sketchybar --add item reload.bar right                                    \
              label.drawing=off
 
 # Clock
-sketchybar --add item clock right                 \
-           --set clock                            \
-             icon=􀐫                               \
-             label="Initial"                      \
-             update_freq=1                        \
-             script="$PLUGIN_DIR/clock.sh"        \                          \
-             NAME=clock
+sketchybar --add item clock right \
+           --set clock \
+           icon.position=right \
+           icon.color=$RIGHT_TEXT_COLOR \
+           label="Initial" \
+           label.font="$TEXT_FONT:Heavy:16.0" \
+           label.color=$RIGHT_TEXT_COLOR \
+           label.padding_right=15 \
+           label.padding_left=0 \
+           update_freq=1 \
+           script="$PLUGIN_DIR/clock.sh" \
+           --add background background.2 \
+           --set background.2 \
+           color=0xFF8A2BE2 \
+           height=$(($BACKGROUND_HEIGHT + 2)) \
+           corner_radius=13 \
+           drawing=on
+      
 
 # Calendar
 sketchybar --add item calendar right             \
            --set calendar                        \
              icon=􀧞                              \
+             icon.color=$RIGHT_TEXT_COLOR \
              label="Initial"                     \
+             label.color=$RIGHT_TEXT_COLOR \
              update_freq=1                       \
              script="$PLUGIN_DIR/calendar.sh"    \                      \
              NAME=calendar
