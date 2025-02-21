@@ -5,7 +5,9 @@
 # https://felixkratz.github.io/SketchyBar/config/components#space----associate-mission-control-spaces-with-an-item
 
 source "$HOME/.config/sketchybar/items/scheme.sh"
-source "$CONFIG_DIR/colors.sh" # Loads all defined colors
+
+current_scheme=$(cat "$COLOR_SCHEME_CACHE")
+get_colors "$current_scheme"
 
 if [ $SELECTED = true ]; then
   sketchybar --set $NAME background.drawing=on \
