@@ -3,7 +3,7 @@
 source "$CONFIG_DIR/colors.sh"
 
 sketchybar --add item yabai_float right \
-           --set yabai_float background.color=$ACCENT_COLOR \
+           --set yabai_float background.color=$LEFT_ITEM_COLOR \
                             label.color=$BAR_COLOR \
                             background.drawing=on \
                             background.height=26 \

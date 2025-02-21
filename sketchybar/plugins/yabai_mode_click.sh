@@ -1,5 +1,5 @@
 #!/bin/bash
-
+source "$HOME/.config/sketchybar/items/scheme.sh"
 source "$CONFIG_DIR/colors.sh"
 source "$CONFIG_DIR/icons.sh"
 
@@ -13,18 +13,18 @@ case "$yabai_mode" in
     
     # Show visual feedback with current icon
     sketchybar -m --set yabai_mode \
-        background.color=$ITEM_BG_COLOR \
+        background.color=$LEFT_ITEM_FEEDBACK_COLOR \
         background.drawing=on \
-        icon.color=$BAR_COLOR
+        icon.color=$LEFT_TEXT_FEEDBACK_COLOR
 
     # Wait for full animation
     sleep 0.2
     
-    # Set icon color back to BAR_COLOR in final state
+    # Set icon color back to text color in final state
     sketchybar -m --animate sin 0 --set yabai_mode \
         icon="$STACK_ICON" \
-        background.color=$ACCENT_COLOR \
-        icon.color=$BAR_COLOR
+        background.color=$LEFT_ITEM_COLOR \
+        icon.color=$LEFT_TEXT_COLOR
     ;;
     stack)
     # Switch to bsp mode first
@@ -32,17 +32,17 @@ case "$yabai_mode" in
     
     # Show visual feedback with current icon
     sketchybar -m --set yabai_mode \
-        background.color=$ITEM_BG_COLOR \
+        background.color=$LEFT_ITEM_FEEDBACK_COLOR \
         background.drawing=on \
-        icon.color=$BAR_COLOR
+        icon.color=$LEFT_TEXT_FEEDBACK_COLOR
 
     # Wait for full animation
     sleep 0.2
     
-    # Set icon color back to BAR_COLOR in final state
+    # Set icon color back to text color in final state
     sketchybar -m --animate sin 0 --set yabai_mode \
         icon="$BSP_ICON" \
-        background.color=$ACCENT_COLOR \
-        icon.color=$BAR_COLOR
+        background.color=$LEFT_ITEM_COLOR \
+        icon.color=$LEFT_TEXT_COLOR
     ;;
 esac

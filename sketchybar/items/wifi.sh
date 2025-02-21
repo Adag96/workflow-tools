@@ -1,11 +1,13 @@
 # #!/bin/bash
 
+#source "$CONFIG_DIR/fonts.sh"  # Loads all defined fonts
+
 # sketchybar --add item wifi right \
 #            --set wifi script="$PLUGIN_DIR/wifi.sh" \
 #                      update_freq=2 \
-#                      icon.font="SF Pro:Bold:16.0" \
+#                      icon.font="$ICON_FONT:Bold:16.0" \
 #                      icon.padding_right=4 \
-#                      label.font="SF Pro:Regular:12.0" \
+#                      label.font="$TEXT_FONT:Regular:12.0" \
 #                      label.padding_right=8 \
 #                      background.padding_left=2 \
 #                      background.padding_right=2 \
