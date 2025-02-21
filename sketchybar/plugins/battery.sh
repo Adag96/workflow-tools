@@ -1,7 +1,11 @@
 #!/bin/sh
 
 source "$CONFIG_DIR/icons.sh"
-source "$CONFIG_DIR/colors.sh"  # Make sure we have access to colors too
+source "$CONFIG_DIR/items/scheme.sh"  # Source the scheme file instead of colors.sh
+
+# Get the current color scheme
+current_scheme=$(cat "$COLOR_SCHEME_CACHE")
+get_colors "$current_scheme"
 
 PERCENTAGE="$(pmset -g batt | grep -Eo "\d+%" | cut -d% -f1)"
 CHARGING="$(pmset -g batt | grep 'AC Power')"
@@ -14,31 +18,35 @@ case "${PERCENTAGE}" in
   9[0-9]|100) 
     sketchybar --set "$NAME" \
       icon="$BATTERY_FULL" \
-      icon.color=$BATTERY_FULL_COLOR \
-      label="${PERCENTAGE}%"
+      icon.color=$RIGHT_TEXT_COLOR \
+      label="${PERCENTAGE}%" \
+      label.color=$RIGHT_TEXT_COLOR
     ;;
   [6-8][0-9]) 
     sketchybar --set "$NAME" \
       icon="$BATTERY_HIGH" \
-      icon.color=$BATTERY_GOOD_COLOR \
-      label="${PERCENTAGE}%"
+      icon.color=$RIGHT_TEXT_COLOR \
+      label="${PERCENTAGE}%" \
+      label.color=$RIGHT_TEXT_COLOR
     ;;
   [3-5][0-9]) 
     sketchybar --set "$NAME" \
       icon="$BATTERY_MED" \
-      icon.color=$BATTERY_MED_COLOR \
-      label="${PERCENTAGE}%"
+      icon.color=$RIGHT_TEXT_COLOR \
+      label="${PERCENTAGE}%" \
+      label.color=$RIGHT_TEXT_COLOR
     ;;
   [1-2][0-9]) 
     sketchybar --set "$NAME" \
       icon="$BATTERY_LOW" \
-      icon.color=$BATTERY_LOW_COLOR \
-      label="${PERCENTAGE}%"
+      icon.color=0xfff7941c \ 
+      label="${PERCENTAGE}%" \
+      label.color=$RIGHT_TEXT_COLOR
     ;;
   *) 
     sketchybar --set "$NAME" \
       icon="$BATTERY_CRIT" \
-      icon.color=$BATTERY_CRIT_COLOR \
+      icon.color=0xffee1924 \
       label="${PERCENTAGE}%"
     ;;
 esac
