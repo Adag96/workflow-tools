@@ -1,8 +1,39 @@
 #!/bin/bash
 
 # Create necessary files for storing project data if they don't exist
-TIMER_DATA_DIR="/Volumes/T7/Ableton Timer Data"
+TIMER_DATA_DIR="$HOME/.config/sketchybar/timer_data"
 TIMER_STATE_FILE="$TIMER_DATA_DIR/timer_state.json"
+
+# Add debugging
+debug_log() {
+  echo "$(date): $1" >> /tmp/ableton_timer_debug.log
+}
+
+debug_log "Script started"
+
+# Define fallback icons first
+RESUME_ICON="▶︎"
+PAUSE_ICON="❚❚"
+
+# Try to source the icons file
+if [ -f "$HOME/.config/sketchybar/icons.sh" ]; then
+  debug_log "Attempting to source icons.sh"
+  source "$HOME/.config/sketchybar/icons.sh"
+  debug_log "After sourcing: RESUME_TIMER_ICON=${RESUME_TIMER_ICON:-not set}, PAUSE_TIMER_ICON=${PAUSE_TIMER_ICON:-not set}"
+  
+  # Use the icons if they're defined, otherwise stick with fallbacks
+  if [ -n "$RESUME_TIMER_ICON" ]; then
+    RESUME_ICON="$RESUME_TIMER_ICON"
+    debug_log "Using custom resume icon"
+  fi
+  
+  if [ -n "$PAUSE_TIMER_ICON" ]; then
+    PAUSE_ICON="$PAUSE_TIMER_ICON"
+    debug_log "Using custom pause icon"
+  fi
+else
+  debug_log "Icons file not found at $HOME/.config/sketchybar/icons.sh"
+fi
 
 mkdir -p "$TIMER_DATA_DIR"
 
@@ -22,17 +53,14 @@ update_timer_state() {
 # Helper function to get the current Ableton project name from window title
 get_ableton_project_name() {
   local window_title=$(yabai -m query --windows --window | jq -r '.title')
+  local window_app=$(yabai -m query --windows --window | jq -r '.app')
   
-  # Extract project name from window title
-  # Ableton shows titles like "Project Name - Ableton Live 11"
-  # or "Project Name* - Ableton Live 11" when unsaved changes exist
-  local project_name=$(echo "$window_title" | sed -E 's/^(.*) - Ableton Live.*/\1/' | sed 's/\*$//')
-  
-  # If we couldn't extract a name or it's not an Ableton window, return empty
-  if [[ "$window_title" != *"Ableton Live"* ]]; then
-    echo ""
+  # Check if this is Ableton (app name "Live")
+  if [[ "$window_app" == "Live" ]]; then
+    # For Ableton, the project name is simply the window title
+    echo "$window_title"
   else
-    echo "$project_name"
+    echo ""
   fi
 }
 
@@ -53,7 +81,8 @@ update_project_timer() {
   local current_project=$(echo "$timer_state" | jq -r '.current_project')
   
   # Check if Ableton is running
-  local ableton_running=$(pgrep -x "Ableton Live" > /dev/null && echo "true" || echo "false")
+  local ableton_running=$(pgrep -x "Live" > /dev/null && echo "true" || echo "false")
+  debug_log "Ableton running: $ableton_running"
   
   # If Ableton isn't running, hide the widget and exit
   if [[ "$ableton_running" == "false" ]]; then
@@ -74,6 +103,7 @@ update_project_timer() {
   
   # Get current project name
   local project_name=$(get_ableton_project_name)
+  debug_log "Project name: $project_name"
   
   # If no project is open, show idle message
   if [[ -z "$project_name" ]]; then
@@ -83,25 +113,78 @@ update_project_timer() {
   
   # Check if project has changed
   if [[ "$current_project" != "$project_name" ]]; then
-    # Save the previous project's time if there was one
-    if [[ ! -z "$current_project" && "$current_project" != "$project_name" ]]; then
-      # Only update if we had a valid previous project
+    debug_log "Project changed from '$current_project' to '$project_name'"
+    
+    # Special case: Only migrate time from "Untitled" if the new project doesn't already exist
+    if [[ "$current_project" == "Untitled" && "$project_name" != "Untitled" ]]; then
+      # Check if the target project already exists in our tracking
+      local project_exists=$(echo "$timer_state" | jq ".projects[\"$project_name\"] != null")
+      
+      if [[ "$project_exists" == "false" ]]; then
+        # This is likely a save of a new project - migrate the time
+        local untitled_time=$(echo "$timer_state" | jq -r '.projects["Untitled"] // 0')
+        local updated_state=$(echo "$timer_state" | jq --arg name "$project_name" --arg time "$untitled_time" '.projects[$name] = ($time|tonumber)')
+        updated_state=$(echo "$updated_state" | jq --arg name "$project_name" '.current_project = $name')
+        update_timer_state "$updated_state"
+        
+        # Keep running state
+        local running_state=$(echo "$timer_state" | jq -r '.running')
+        updated_state=$(echo "$updated_state" | jq --arg state "$running_state" '.running = ($state=="true")')
+        update_timer_state "$updated_state"
+        
+        # Clear the Untitled project's time since we've migrated away from it
+        updated_state=$(echo "$updated_state" | jq '.projects["Untitled"] = 0')
+        update_timer_state "$updated_state"
+      else
+        # This is likely opening an existing project - keep its existing time
+        local updated_state=$(echo "$timer_state" | jq --arg name "$project_name" '.current_project = $name')
+        update_timer_state "$updated_state"
+        
+        # Clear the Untitled project's time since we're done with it
+        updated_state=$(echo "$updated_state" | jq '.projects["Untitled"] = 0')
+        update_timer_state "$updated_state"
+      fi
+    elif [[ "$current_project" != "Untitled" && "$project_name" == "Untitled" ]]; then
+      # We're switching to Untitled from a named project
+      # First save the previous project's time
       local prev_project_time=$(echo "$timer_state" | jq -r ".projects[\"$current_project\"] // 0")
       local updated_state=$(echo "$timer_state" | jq ".projects[\"$current_project\"] = $prev_project_time")
+      
+      # Start fresh with Untitled project
+      updated_state=$(echo "$updated_state" | jq '.projects["Untitled"] = 0')
+      updated_state=$(echo "$updated_state" | jq '.current_project = "Untitled"')
+      updated_state=$(echo "$updated_state" | jq '.running = true')
       update_timer_state "$updated_state"
+    else
+      # Standard project change handling
+      # Save the previous project's time
+      if [[ ! -z "$current_project" ]]; then
+        local prev_project_time=$(echo "$timer_state" | jq -r ".projects[\"$current_project\"] // 0")
+        local updated_state=$(echo "$timer_state" | jq ".projects[\"$current_project\"] = $prev_project_time")
+        
+        # If we're leaving Untitled, clear its time
+        if [[ "$current_project" == "Untitled" ]]; then
+          updated_state=$(echo "$updated_state" | jq '.projects["Untitled"] = 0')
+        fi
+        
+        update_timer_state "$updated_state"
+      fi
+      
+      # Update current project
+      local updated_state=$(echo "$timer_state" | jq --arg name "$project_name" '.current_project = $name')
+      update_timer_state "$updated_state"
+      
+      # Initialize this project if it doesn't exist yet
+      local project_exists=$(echo "$updated_state" | jq ".projects[\"$project_name\"] != null")
+      if [[ "$project_exists" == "false" ]]; then
+        updated_state=$(echo "$updated_state" | jq --arg name "$project_name" '.projects[$name] = 0')
+        # Auto-start timer for new projects
+        updated_state=$(echo "$updated_state" | jq '.running = true')
+        update_timer_state "$updated_state"
+      fi
     fi
     
-    # Update current project
-    local updated_state=$(echo "$timer_state" | jq --arg name "$project_name" '.current_project = $name')
-    update_timer_state "$updated_state"
-    
-    # Initialize this project if it doesn't exist yet
-    local project_exists=$(echo "$updated_state" | jq ".projects[\"$project_name\"] != null")
-    if [[ "$project_exists" == "false" ]]; then
-      updated_state=$(echo "$updated_state" | jq --arg name "$project_name" '.projects[$name] = 0')
-      update_timer_state "$updated_state"
-    fi
-    
+    # Reload the timer state after changes
     timer_state=$(cat "$TIMER_STATE_FILE")
   fi
   
@@ -117,9 +200,11 @@ update_project_timer() {
   
   # Format the time for display
   local formatted_time=$(format_time $elapsed_time)
-  local status_indicator=$([ "$running" == "true" ] && echo "▶︎" || echo "❚❚")
+  # Icon shows the action that will happen when clicked
+  local status_indicator=$([ "$running" == "true" ] && echo "$PAUSE_ICON" || echo "$RESUME_ICON")
   
   # Update the display
+  debug_log "Updating display: project=$project_name, time=$formatted_time, icon=$status_indicator"
   sketchybar --set ableton_timer label="$project_name: $formatted_time"
   sketchybar --set ableton_timer_toggle label="$status_indicator"
 }
@@ -142,6 +227,7 @@ toggle_timer() {
 
 # Initialize the timer widget (called when Sketchybar starts)
 initialize_timer_widget() {
+  debug_log "Initializing timer widget"
   # Add the timer item to Sketchybar
   sketchybar --add item ableton_timer right \
              --set ableton_timer drawing=off \
@@ -155,8 +241,10 @@ initialize_timer_widget() {
   sketchybar --add item ableton_timer_toggle right \
              --set ableton_timer_toggle drawing=off \
              --set ableton_timer_toggle click_script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh toggle" \
-             --set ableton_timer_toggle label="❚❚" \
+             --set ableton_timer_toggle label="$RESUME_ICON" \
              --set ableton_timer_toggle icon.padding_left=5
+  
+  debug_log "Timer widget initialization completed"
 }
 
 # Main script logic
