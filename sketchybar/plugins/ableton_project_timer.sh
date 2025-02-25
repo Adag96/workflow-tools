@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Create necessary files for storing project data if they don't exist
-TIMER_DATA_DIR="$HOME/.config/sketchybar/timer_data"
+TIMER_DATA_DIR="/Volumes/T7/Ableton Timer Data"
 TIMER_STATE_FILE="$TIMER_DATA_DIR/timer_state.json"
 
 mkdir -p "$TIMER_DATA_DIR"

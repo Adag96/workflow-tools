@@ -143,3 +143,6 @@ source $ITEM_DIR/media.sh
 
 ##### Force all scripts to run the first time (never do this in a script) #####
 sketchybar --update
+
+# Initialize Ableton project timer
+/Users/adamdagostino/.config/sketchybar/plugins/ableton_project_timer.sh init
