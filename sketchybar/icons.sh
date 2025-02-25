@@ -20,6 +20,10 @@ export RELOAD_ICON="􂣾"
 # Color scheme selector icon
 export SCHEME_ICON="􀏅"
 
+# Ableton timer icons
+export RESUME_TIMER_ICON="􀊖"
+export PAUSE_TIMER_ICON="􀊘"
+
 # WiFi widget icons
 WIFI_ICONS=(
   wifi.high=􀽗
