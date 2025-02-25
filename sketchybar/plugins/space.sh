@@ -11,11 +11,11 @@ get_colors "$current_scheme"
 
 if [ $SELECTED = true ]; then
   sketchybar --set $NAME background.drawing=on \
-                         background.color=$LEFT_ITEM_COLOR \
-                         label.color=$LEFT_TEXT_COLOR \
-                         icon.color=$LEFT_TEXT_COLOR
+                         background.color=$ACTIVE_SPACE_ITEM_COLOR \
+                         label.color=$ACTIVE_SPACE_TEXT_COLOR \
+                         icon.color=$ACTIVE_SPACE_TEXT_COLOR
 else
   sketchybar --set $NAME background.color=off \
-                         label.color=$LEFT_ITEM_COLOR \
-                         icon.color=$LEFT_ITEM_COLOR 
+                         label.color=$LEFT_TEXT_COLOR \
+                         icon.color=$LEFT_TEXT_COLOR 
 fi

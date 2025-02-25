@@ -6,7 +6,7 @@ source "$CONFIG_DIR/icons.sh"  # Loads all defined icons
 # Define the color schemes
 SCHEMES=(
   "KANDY"
-  "NEON"
+  "DEUS"
   "BONEYARD"
 )
 
@@ -21,6 +21,9 @@ if [ ! -f "$COLOR_SCHEME_CACHE" ]; then
 fi
 
 # Color definitions based on scheme
+
+# Active space text color and media color should match
+
 get_colors() {
   local scheme=$1
   case $scheme in
@@ -28,8 +31,10 @@ get_colors() {
       export BAR_COLOR=0xff3C4CA6
       export LEFT_ITEM_COLOR=0xffD996C7
       export LEFT_ITEM_FEEDBACK_COLOR=0xff9D7191
-      export LEFT_TEXT_COLOR=0xff3C4CA6
+      export LEFT_TEXT_COLOR=0xffD996C7
       export LEFT_TEXT_FEEDBACK_COLOR=0xff313E89
+      export ACTIVE_SPACE_ITEM_COLOR=0xffD996C7
+      export ACTIVE_SPACE_TEXT_COLOR=0xff3C4CA6
       export RIGHT_ITEM_COLOR=0xffD996C7
       export RIGHT_ITEM_FEEDBACK_COLOR=0xff9D7191
       export RIGHT_TEXT_COLOR=0xff3C4CA6
@@ -37,31 +42,48 @@ get_colors() {
       export MEDIA_COLOR=0xffD996C7
       export ACCENT_COLOR=0xffD959AC
       ;;
-    "NEON")
-      export BAR_COLOR=0xff8A2BE2          
-      export LEFT_ITEM_COLOR=0xffFF69B4     
-      export LEFT_ITEM_FEEDBACK_COLOR=0xffDDA0DD  
-      export LEFT_TEXT_COLOR=0xff8A2BE2     
-      export LEFT_TEXT_FEEDBACK_COLOR=0xff9370DB  
-      export RIGHT_ITEM_COLOR=0xffFF69B4    
-      export RIGHT_ITEM_FEEDBACK_COLOR=0xffDDA0DD 
-      export RIGHT_TEXT_COLOR=0xff8A2BE2    
-      export RIGHT_TEXT_FEEDBACK_COLOR=0xff9370DB 
-      export MEDIA_COLOR=0xffFF69B4         
-      export ACCENT_COLOR=0xffBA55D3        
+    "DEUS")
+      export BAR_COLOR=0xffffffff  
+      export LEFT_ITEM_COLOR=0xff6A8C61
+      export LEFT_ITEM_FEEDBACK_COLOR=0xff546F4D
+      export LEFT_TEXT_COLOR=0xff6A8C61
+      export LEFT_TEXT_FEEDBACK_COLOR=0xffC5C5C5
+      export ACTIVE_SPACE_ITEM_COLOR=0xff6A8C61
+      export ACTIVE_SPACE_TEXT_COLOR=0xfffda1d7  
+      export RIGHT_ITEM_COLOR=0xff6A8C61
+      export RIGHT_ITEM_FEEDBACK_COLOR=0xff546F4D
+      export RIGHT_TEXT_COLOR=0xffffffff  
+      export RIGHT_TEXT_FEEDBACK_COLOR=0xffC5C5C5
+      export MEDIA_COLOR=0xfffda1d7    
+      export ACCENT_COLOR=0xffF288C2   
+
+      # COLOR PALETTE:
+      # 0xffD9D2D5
+      # 0xfffda1d7
+      # 0xff6A8C61
+      # 0xff736D6C
       ;;
     "BONEYARD")
-      export BAR_COLOR=0xffF2F2F2
-      export LEFT_ITEM_COLOR=0xff8C7972
-      export LEFT_ITEM_FEEDBACK_COLOR=0xff
-      export LEFT_TEXT_COLOR=0xffF2F2F2
-      export LEFT_TEXT_FEEDBACK_COLOR=0xff
-      export RIGHT_ITEM_COLOR=0xff8C7972
-      export RIGHT_ITEM_FEEDBACK_COLOR=0xff
-      export RIGHT_TEXT_COLOR=0xffF2F2F2
-      export RIGHT_TEXT_FEEDBACK_COLOR=0xff
-      export MEDIA_COLOR=0xffA63333   
-      export ACCENT_COLOR=0xff 
+      export BAR_COLOR=0xffdee5de
+      export LEFT_ITEM_COLOR=0xff816f65
+      export LEFT_ITEM_FEEDBACK_COLOR=0xff65574E
+      export LEFT_TEXT_COLOR=0xff816f65
+      export LEFT_TEXT_FEEDBACK_COLOR=0xffA6ABA6
+      export ACTIVE_SPACE_ITEM_COLOR=0xffaa2224
+      export ACTIVE_SPACE_TEXT_COLOR=0xffdee5de
+      export RIGHT_ITEM_COLOR=0xff816f65
+      export RIGHT_ITEM_FEEDBACK_COLOR=0xff65574E
+      export RIGHT_TEXT_COLOR=0xffdee5de
+      export RIGHT_TEXT_FEEDBACK_COLOR=0xffA6ABA6
+      export MEDIA_COLOR=0xffaa2224
+      export ACCENT_COLOR=0xffd89048
+
+      # COLOR PALETTE:
+      # 0xff816f65 brown
+      # 0xffd89048 orange
+      # 0xffdee5de white
+      # 0xffaa2224 red
+
   esac
 }
 
