@@ -64,14 +64,39 @@ get_ableton_project_name() {
   fi
 }
 
-# Helper function to format seconds into HH:MM:SS
+# Helper function to format seconds into variable-length time format
 format_time() {
   local total_seconds=$1
   local hours=$((total_seconds / 3600))
   local minutes=$(( (total_seconds % 3600) / 60 ))
   local seconds=$((total_seconds % 60))
   
-  printf "%02d:%02d:%02d" $hours $minutes $seconds
+  # Handle different formatting cases
+  if [ $hours -eq 0 ]; then
+    # Less than an hour
+    if [ $minutes -eq 0 ]; then
+      # Less than a minute
+      if [ $seconds -lt 10 ]; then
+        printf "0:0%d" $seconds
+      else
+        printf "0:%d" $seconds
+      fi
+    else
+      # Minutes and seconds
+      if [ $minutes -lt 10 ]; then
+        printf "%d:%02d" $minutes $seconds
+      else
+        printf "%d:%02d" $minutes $seconds
+      fi
+    fi
+  else
+    # Hours, minutes, and seconds
+    if [ $hours -lt 10 ]; then
+      printf "%d:%02d:%02d" $hours $minutes $seconds
+    else
+      printf "%02d:%02d:%02d" $hours $minutes $seconds
+    fi
+  fi
 }
 
 # Function to update the timer for the current project
@@ -107,7 +132,7 @@ update_project_timer() {
   
   # If no project is open, show idle message
   if [[ -z "$project_name" ]]; then
-    sketchybar --set ableton_timer label="No project"
+    sketchybar --set ableton_timer label=""
     return
   fi
   
@@ -205,7 +230,7 @@ update_project_timer() {
   
   # Update the display
   debug_log "Updating display: project=$project_name, time=$formatted_time, icon=$status_indicator"
-  sketchybar --set ableton_timer label="$project_name: $formatted_time"
+  sketchybar --set ableton_timer label=""
   sketchybar --set ableton_timer_toggle label="$status_indicator"
 }
 
@@ -233,17 +258,23 @@ initialize_timer_widget() {
              --set ableton_timer drawing=off \
              --set ableton_timer update_freq=1 \
              --set ableton_timer script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh update" \
-             --set ableton_timer label="No project" \
-             --set ableton_timer icon=🎵 \
-             --set ableton_timer icon.padding_right=5
+             --set ableton_timer label="" \
+             --set ableton_timer width=0 \
+             --set ableton_timer icon.drawing=off
   
-  # Add the start/stop toggle button
-  sketchybar --add item ableton_timer_toggle right \
+  # Add the start/stop toggle button next to front app
+  sketchybar --add item ableton_timer_toggle left \
              --set ableton_timer_toggle drawing=off \
+             --set ableton_timer_toggle \
+                   width=40 \
+                   icon.padding_left=0 \
+                   icon.padding_right=0 \
+                   icon.font="$ICON_FONT:Semibold:18.0" \
+                   align=center \
              --set ableton_timer_toggle click_script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh toggle" \
              --set ableton_timer_toggle label="$RESUME_ICON" \
-             --set ableton_timer_toggle icon.padding_left=5
-  
+             --set ableton_timer_toggle associated_display=active
+
   debug_log "Timer widget initialization completed"
 }
 
