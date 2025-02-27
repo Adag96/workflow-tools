@@ -57,6 +57,12 @@ get_ableton_project_name() {
   
   # Check if this is Ableton (app name "Live")
   if [[ "$window_app" == "Live" ]]; then
+    # Skip Save dialogs to prevent them from being tracked as projects
+    if [[ "$window_title" == "Save" || "$window_title" == "Save As" || "$window_title" == "Save Live Set" ]]; then
+      debug_log "Detected Save dialog - ignoring window title change"
+      return
+    fi
+    
     # For Ableton, the project name is simply the window title
     echo "$window_title"
   else
@@ -111,6 +117,29 @@ update_project_timer() {
   
   # If Ableton isn't running, hide the widget and exit
   if [[ "$ableton_running" == "false" ]]; then
+    # Remove the Untitled project entry when Live closes
+    local has_untitled=$(echo "$timer_state" | jq '.projects | has("Untitled")')
+    if [[ "$has_untitled" == "true" ]]; then
+      debug_log "Live is closed - removing Untitled project data"
+      local updated_state=$(echo "$timer_state" | jq 'del(.projects["Untitled"])')
+      update_timer_state "$updated_state"
+    fi
+    
+    # Also remove any "Save" entries that might have been created
+    for save_variant in "Save" "Save As" "Save Live Set"; do
+      local has_variant=$(echo "$timer_state" | jq --arg variant "$save_variant" '.projects | has($variant)')
+      if [[ "$has_variant" == "true" ]]; then
+        debug_log "Live is closed - removing $save_variant dialog project data"
+        local updated_state=$(echo "$timer_state" | jq --arg variant "$save_variant" 'del(.projects[$variant])')
+        update_timer_state "$updated_state"
+      fi
+    done
+    
+    # Reset current_project to "Live" when Live closes
+    local updated_state=$(echo "$timer_state" | jq '.current_project = "Live"')
+    update_timer_state "$updated_state"
+    debug_log "Live is closed - reset current_project to 'Live'"
+    
     sketchybar --set ableton_timer drawing=off
     sketchybar --set ableton_timer_toggle drawing=off
     
@@ -157,23 +186,29 @@ update_project_timer() {
         updated_state=$(echo "$updated_state" | jq --arg state "$running_state" '.running = ($state=="true")')
         update_timer_state "$updated_state"
         
-        # Clear the Untitled project's time since we've migrated away from it
-        updated_state=$(echo "$updated_state" | jq '.projects["Untitled"] = 0')
+        # Remove the Untitled project entirely
+        updated_state=$(echo "$updated_state" | jq 'del(.projects["Untitled"])')
         update_timer_state "$updated_state"
+        
+        debug_log "Migrated time from Untitled to $project_name: $untitled_time seconds"
       else
         # This is likely opening an existing project - keep its existing time
         local updated_state=$(echo "$timer_state" | jq --arg name "$project_name" '.current_project = $name')
         update_timer_state "$updated_state"
         
-        # Clear the Untitled project's time since we're done with it
-        updated_state=$(echo "$updated_state" | jq '.projects["Untitled"] = 0')
+        # Remove the Untitled project entirely
+        updated_state=$(echo "$updated_state" | jq 'del(.projects["Untitled"])')
         update_timer_state "$updated_state"
       fi
     elif [[ "$current_project" != "Untitled" && "$project_name" == "Untitled" ]]; then
       # We're switching to Untitled from a named project
       # First save the previous project's time
-      local prev_project_time=$(echo "$timer_state" | jq -r ".projects[\"$current_project\"] // 0")
-      local updated_state=$(echo "$timer_state" | jq ".projects[\"$current_project\"] = $prev_project_time")
+      if [[ "$current_project" != "Live" ]]; then
+        local prev_project_time=$(echo "$timer_state" | jq -r ".projects[\"$current_project\"] // 0")
+        local updated_state=$(echo "$timer_state" | jq ".projects[\"$current_project\"] = $prev_project_time")
+      else
+        local updated_state=$(echo "$timer_state")
+      fi
       
       # Start fresh with Untitled project
       updated_state=$(echo "$updated_state" | jq '.projects["Untitled"] = 0')
@@ -183,16 +218,19 @@ update_project_timer() {
     else
       # Standard project change handling
       # Save the previous project's time
-      if [[ ! -z "$current_project" ]]; then
+      if [[ ! -z "$current_project" && "$current_project" != "Live" ]]; then
         local prev_project_time=$(echo "$timer_state" | jq -r ".projects[\"$current_project\"] // 0")
         local updated_state=$(echo "$timer_state" | jq ".projects[\"$current_project\"] = $prev_project_time")
         
-        # If we're leaving Untitled, clear its time
+        # If we're leaving Untitled, remove it entirely
         if [[ "$current_project" == "Untitled" ]]; then
-          updated_state=$(echo "$updated_state" | jq '.projects["Untitled"] = 0')
+          updated_state=$(echo "$updated_state" | jq 'del(.projects["Untitled"])')
         fi
         
         update_timer_state "$updated_state"
+      else
+        # Coming from "Live" placeholder, just update current project
+        local updated_state=$(echo "$timer_state")
       fi
       
       # Update current project
