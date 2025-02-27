@@ -24,11 +24,3 @@ if [ ! -f ~/.config/sketchybar/timer_data/timer_state.json ]; then
 else
   echo "Existing timer state file preserved"
 fi
-
-# Add initialization to sketchybarrc if not already there
-if ! grep -q "ableton_project_timer.sh init" ~/.config/sketchybar/sketchybarrc; then
-  echo "" >> ~/.config/sketchybar/sketchybarrc
-  echo "# Initialize Ableton project timer" >> ~/.config/sketchybar/sketchybarrc
-  echo "$HOME/.config/sketchybar/plugins/ableton_project_timer.sh init" >> ~/.config/sketchybar/sketchybarrc
-  echo "Added Ableton timer initialization to sketchybarrc"
-fi
