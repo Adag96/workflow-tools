@@ -115,21 +115,7 @@ toggle_scheme() {
 # First, make sure we load the current scheme
 get_colors "$(cat "$COLOR_SCHEME_CACHE")"
 
-# Initial setup of the color scheme item with properly loaded colors
-sketchybar --add item color_scheme right \
-           --set color_scheme \
-                icon=$SCHEME_ICON \
-                icon.color=$RIGHT_TEXT_COLOR \
-                icon.padding_left=8 \
-                icon.padding_right=8 \
-                label="" \
-                background.color=$RIGHT_ITEM_COLOR \
-                background.corner_radius=50 \
-                background.height=27 \
-                background.drawing=on \
-                padding_left=10 \
-                padding_right=10 \
-                click_script="$HOME/.config/sketchybar/plugins/color_scheme_click.sh"
+# Removed the button creation part - will be moved to sketchybarrc
 
 # Update colors based on current scheme
 get_colors "$(cat "$COLOR_SCHEME_CACHE")"

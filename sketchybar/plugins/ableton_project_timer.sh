@@ -266,10 +266,13 @@ initialize_timer_widget() {
   sketchybar --add item ableton_timer_toggle left \
              --set ableton_timer_toggle drawing=off \
              --set ableton_timer_toggle \
-                   width=40 \
+                   label.padding=0 \
                    icon.padding_left=0 \
                    icon.padding_right=0 \
                    icon.font="$ICON_FONT:Semibold:18.0" \
+                   background.corner_radius=50 \
+                   padding.left=5 \
+                   padding.right=0 \
                    align=center \
              --set ableton_timer_toggle click_script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh toggle" \
              --set ableton_timer_toggle label="$RESUME_ICON" \
