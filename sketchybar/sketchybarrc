@@ -165,4 +165,4 @@ source $ITEM_DIR/media.sh
 sketchybar --update
 
 # Initialize Ableton project timer
-/Users/adamdagostino/.config/sketchybar/plugins/ableton_project_timer.sh init
+"$CONFIG_DIR/plugins/ableton_project_timer.sh" init
