@@ -3,10 +3,12 @@
 # Create necessary files for storing project data if they don't exist
 TIMER_DATA_DIR="$HOME/.config/sketchybar/timer_data"
 TIMER_STATE_FILE="$TIMER_DATA_DIR/timer_state.json"
+LAST_ABLETON_STATE_FILE="$TIMER_DATA_DIR/last_ableton_state.json"
+MANUAL_OVERRIDE_FILE="$TIMER_DATA_DIR/manual_override.json"
 
-# Add debugging
+# Add debugging with timestamp and line numbers
 debug_log() {
-  echo "$(date): $1" >> /tmp/ableton_timer_debug.log
+  echo "$(date '+%Y-%m-%d %H:%M:%S') [${BASH_LINENO[0]}]: $1" >> /tmp/ableton_timer_debug.log
 }
 
 debug_log "Script started"
@@ -35,39 +37,168 @@ else
   debug_log "Icons file not found at $HOME/.config/sketchybar/icons.sh"
 fi
 
+# Create the timer data directory
 mkdir -p "$TIMER_DATA_DIR"
+debug_log "Timer data directory: $TIMER_DATA_DIR"
 
-if [ ! -f "$TIMER_STATE_FILE" ]; then
-  echo '{
-    "running": false,
-    "current_project": "",
-    "projects": {}
-  }' > "$TIMER_STATE_FILE"
-fi
+# Initialize the timer state file if it doesn't exist or is invalid
+initialize_timer_state() {
+  debug_log "Checking timer state file: $TIMER_STATE_FILE"
+  
+  local needs_init=true
+  
+  # Check if file exists and has content
+  if [ -f "$TIMER_STATE_FILE" ]; then
+    local file_size=$(wc -c < "$TIMER_STATE_FILE")
+    debug_log "Existing file size: $file_size bytes"
+    
+    if [ "$file_size" -gt 10 ]; then  # At least some reasonable JSON size
+      # Check if content is valid JSON
+      if cat "$TIMER_STATE_FILE" | jq . >/dev/null 2>&1; then
+        debug_log "Existing timer state file contains valid JSON"
+        needs_init=false
+      else
+        debug_log "Existing timer state file contains invalid JSON"
+      fi
+    else
+      debug_log "Existing timer state file too small or empty"
+    fi
+  else
+    debug_log "Timer state file does not exist"
+  fi
+  
+  # Initialize if needed
+  if [ "$needs_init" = true ]; then
+    debug_log "Initializing timer state file"
+    echo '{
+      "running": false,
+      "current_project": "Untitled",
+      "projects": {
+        "Untitled": 0
+      }
+    }' > "$TIMER_STATE_FILE"
+    
+    # Verify file creation
+    if [ -f "$TIMER_STATE_FILE" ]; then
+      local new_size=$(wc -c < "$TIMER_STATE_FILE")
+      debug_log "Timer state file created, size: $new_size bytes"
+      debug_log "Timer state file content: $(cat "$TIMER_STATE_FILE")"
+    else
+      debug_log "ERROR: Failed to create timer state file"
+    fi
+  fi
+}
 
-# Helper function to update the timer state file
-update_timer_state() {
-  echo "$1" > "$TIMER_STATE_FILE"
+# Call initialization during script startup
+initialize_timer_state
+
+# Write timer state to file without validation
+write_timer_state() {
+  local new_state="$1"
+  debug_log "Writing timer state to file"
+  echo "$new_state" > "$TIMER_STATE_FILE"
+  sync  # Force filesystem sync to ensure write completes
+}
+
+# Initialize or get the Ableton state
+get_ableton_state() {
+  debug_log "Getting Ableton state data"
+  
+  if [ ! -f "$LAST_ABLETON_STATE_FILE" ] || [ ! -s "$LAST_ABLETON_STATE_FILE" ]; then
+    debug_log "Initializing Ableton state file"
+    echo '{"running": false, "last_check_time": 0}' > "$LAST_ABLETON_STATE_FILE"
+  fi
+  
+  # Read and return the file content, ensuring it's valid JSON
+  local content=$(cat "$LAST_ABLETON_STATE_FILE")
+  if echo "$content" | jq . >/dev/null 2>&1; then
+    echo "$content"
+  else
+    debug_log "Invalid Ableton state JSON, reinitializing"
+    echo '{"running": false, "last_check_time": 0}'
+  fi
+}
+
+# Write Ableton state to file
+write_ableton_state() {
+  local new_state="$1"
+  debug_log "Writing new Ableton state: $new_state"
+  
+  if echo "$new_state" | jq . >/dev/null 2>&1; then
+    echo "$new_state" > "$LAST_ABLETON_STATE_FILE"
+    sync  # Force filesystem sync
+  else
+    debug_log "ERROR: Attempted to write invalid JSON to Ableton state file"
+  fi
+}
+
+# Initialize or get the manual override state
+get_manual_override() {
+  debug_log "Getting manual override state"
+  
+  if [ ! -f "$MANUAL_OVERRIDE_FILE" ] || [ ! -s "$MANUAL_OVERRIDE_FILE" ]; then
+    debug_log "Initializing manual override file"
+    echo '{"enabled": false, "timestamp": 0}' > "$MANUAL_OVERRIDE_FILE"
+  fi
+  
+  # Read and return the file content, ensuring it's valid JSON
+  local content=$(cat "$MANUAL_OVERRIDE_FILE")
+  if echo "$content" | jq . >/dev/null 2>&1; then
+    echo "$content"
+  else
+    debug_log "Invalid manual override JSON, reinitializing"
+    echo '{"enabled": false, "timestamp": 0}'
+  fi
+}
+
+# Write manual override state to file
+write_manual_override() {
+  local new_state="$1"
+  debug_log "Writing new manual override state: $new_state"
+  
+  if echo "$new_state" | jq . >/dev/null 2>&1; then
+    echo "$new_state" > "$MANUAL_OVERRIDE_FILE"
+    sync  # Force filesystem sync
+  else
+    debug_log "ERROR: Attempted to write invalid JSON to manual override file"
+  fi
 }
 
 # Helper function to get the current Ableton project name from window title
 get_ableton_project_name() {
-  local window_title=$(yabai -m query --windows --window | jq -r '.title')
-  local window_app=$(yabai -m query --windows --window | jq -r '.app')
+  debug_log "=== get_ableton_project_name START ==="
   
-  # Check if this is Ableton (app name "Live")
-  if [[ "$window_app" == "Live" ]]; then
-    # Skip Save dialogs to prevent them from being tracked as projects
+  # Get ALL windows first, then filter for Live
+  debug_log "Getting all window info from yabai..."
+  all_windows=$(yabai -m query --windows)
+  debug_log "Searching for Live windows..."
+  
+  # Extract Live windows
+  live_windows=$(echo "$all_windows" | jq -r '.[] | select(.app=="Live")')
+  debug_log "Found Live windows: $(echo "$live_windows" | wc -l | tr -d ' ')"
+  
+  # If we found Live windows
+  if [[ -n "$live_windows" ]]; then
+    # Get the first Live window's title
+    window_title=$(echo "$live_windows" | jq -r '.title' 2>/dev/null | head -n 1)
+    debug_log "Live window title: '$window_title'"
+    
+    # Check if this is a Save dialog
     if [[ "$window_title" == "Save" || "$window_title" == "Save As" || "$window_title" == "Save Live Set" ]]; then
       debug_log "Detected Save dialog - ignoring window title change"
+      debug_log "=== get_ableton_project_name END ==="
       return
     fi
     
-    # For Ableton, the project name is simply the window title
+    # Return the title
+    debug_log "Returning window title: '$window_title'"
     echo "$window_title"
   else
+    debug_log "No Live windows found"
     echo ""
   fi
+  
+  debug_log "=== get_ableton_project_name END ==="
 }
 
 # Helper function to format seconds into variable-length time format
@@ -105,64 +236,122 @@ format_time() {
   fi
 }
 
+# Get timer state from file, ensuring it's valid
+get_timer_state() {
+  debug_log "Getting timer state from file"
+  
+  # Ensure the file exists and is valid
+  initialize_timer_state
+  
+  # Read and return the file content
+  cat "$TIMER_STATE_FILE"
+}
+
 # Function to update the timer for the current project
 update_project_timer() {
-  local timer_state=$(cat "$TIMER_STATE_FILE")
+  debug_log "=== update_project_timer START ==="
+  
+  # Get the current timer state
+  local timer_state=$(get_timer_state)
+  debug_log "Current timer state: $timer_state"
+  
   local running=$(echo "$timer_state" | jq -r '.running')
   local current_project=$(echo "$timer_state" | jq -r '.current_project')
+  debug_log "Current state: running=$running, current_project=$current_project"
+  
+  # Get the manual override state
+  local manual_override=$(get_manual_override)
+  local override_enabled=$(echo "$manual_override" | jq -r '.enabled')
+  local override_timestamp=$(echo "$manual_override" | jq -r '.timestamp')
+  debug_log "Manual override: enabled=$override_enabled, timestamp=$override_timestamp"
   
   # Check if Ableton is running
   local ableton_running=$(pgrep -x "Live" > /dev/null && echo "true" || echo "false")
   debug_log "Ableton running: $ableton_running"
   
+  # Check if Ableton is in focus (front app)
+  local front_app=$(yabai -m query --windows --window | jq -r '.app')
+  local ableton_focused=$([ "$front_app" = "Live" ] && echo "true" || echo "false")
+  debug_log "Front app: $front_app, Ableton focused: $ableton_focused"
+  
+  # Get the last Ableton state
+  local ableton_state=$(get_ableton_state)
+  local last_running=$(echo "$ableton_state" | jq -r '.running')
+  local current_time=$(date +%s)
+  
+  # Check for Ableton restart (was not running before, is running now)
+  if [[ "$last_running" == "false" && "$ableton_running" == "true" ]]; then
+    debug_log "Ableton was just started, resetting 'Untitled' project data and setting current project to 'Live'"
+    
+    # Reset the Untitled project data
+    local new_state=$(echo "$timer_state" | jq '.projects["Untitled"] = 0')
+    
+    # Set current project to "Live" initially
+    new_state=$(echo "$new_state" | jq '.current_project = "Live"')
+    
+    # Initialize "Live" project if it doesn't exist
+    local live_exists=$(echo "$new_state" | jq '.projects | has("Live")')
+    if [[ "$live_exists" == "false" ]]; then
+      new_state=$(echo "$new_state" | jq '.projects["Live"] = 0')
+    fi
+    
+    write_timer_state "$new_state"
+    timer_state="$new_state"
+    current_project="Live"
+  fi
+  
+  # Update and store the current Ableton state
+  local new_ableton_state=$(echo "$ableton_state" | jq --arg running "$ableton_running" --arg time "$current_time" \
+    '.running = ($running == "true") | .last_check_time = ($time | tonumber)')
+  write_ableton_state "$new_ableton_state"
+  
   # If Ableton isn't running, hide the widget and exit
   if [[ "$ableton_running" == "false" ]]; then
-    # Remove the Untitled project entry when Live closes
-    local has_untitled=$(echo "$timer_state" | jq '.projects | has("Untitled")')
-    if [[ "$has_untitled" == "true" ]]; then
-      debug_log "Live is closed - removing Untitled project data"
-      local updated_state=$(echo "$timer_state" | jq 'del(.projects["Untitled"])')
-      update_timer_state "$updated_state"
-    fi
-    
-    # Also remove any "Save" entries that might have been created
-    for save_variant in "Save" "Save As" "Save Live Set"; do
-      local has_variant=$(echo "$timer_state" | jq --arg variant "$save_variant" '.projects | has($variant)')
-      if [[ "$has_variant" == "true" ]]; then
-        debug_log "Live is closed - removing $save_variant dialog project data"
-        local updated_state=$(echo "$timer_state" | jq --arg variant "$save_variant" 'del(.projects[$variant])')
-        update_timer_state "$updated_state"
-      fi
-    done
-    
-    # Reset current_project to "Live" when Live closes
-    local updated_state=$(echo "$timer_state" | jq '.current_project = "Live"')
-    update_timer_state "$updated_state"
-    debug_log "Live is closed - reset current_project to 'Live'"
-    
+    debug_log "Ableton not running, hiding widgets"
     sketchybar --set ableton_timer drawing=off
     sketchybar --set ableton_timer_toggle drawing=off
-    
-    # If timer was running, save the state as not running
-    if [[ "$running" == "true" ]]; then
-      local updated_state=$(echo "$timer_state" | jq '.running = false')
-      update_timer_state "$updated_state"
-    fi
+    debug_log "=== update_project_timer END ==="
     return
   fi
   
   # Ableton is running, show the widget
+  debug_log "Ableton is running, showing widgets"
   sketchybar --set ableton_timer drawing=on
   sketchybar --set ableton_timer_toggle drawing=on
   
-  # Get current project name
-  local project_name=$(get_ableton_project_name)
-  debug_log "Project name: $project_name"
+  # Auto-pause timer if Ableton loses focus
+  if [[ "$ableton_focused" == "false" && "$running" == "true" && "$override_enabled" == "false" ]]; then
+    debug_log "Ableton lost focus, auto-pausing timer"
+    running="false"
+    local updated_state=$(echo "$timer_state" | jq '.running = false')
+    write_timer_state "$updated_state"
+    timer_state="$updated_state"
+  fi
   
-  # If no project is open, show idle message
+  # Auto-resume timer if Ableton gains focus (only if not manually paused)
+  if [[ "$ableton_focused" == "true" && "$running" == "false" && "$override_enabled" == "false" ]]; then
+    debug_log "Ableton gained focus, auto-resuming timer"
+    running="true"
+    local updated_state=$(echo "$timer_state" | jq '.running = true')
+    write_timer_state "$updated_state"
+    timer_state="$updated_state"
+  fi
+  
+  # Get current project name
+  debug_log "Getting current project name..."
+  local project_name=$(get_ableton_project_name)
+  debug_log "Project name: '$project_name'"
+  
+  # If no project is open, use appropriate default
   if [[ -z "$project_name" ]]; then
-    sketchybar --set ableton_timer label=""
-    return
+    # If we're in initial startup (current project is already "Live"), keep it as "Live"
+    if [[ "$current_project" == "Live" ]]; then
+      debug_log "No project name detected during startup, keeping as 'Live'"
+      project_name="Live"
+    else
+      debug_log "No project name detected, using 'Untitled'"
+      project_name="Untitled"
+    fi
   fi
   
   # Check if project has changed
@@ -172,93 +361,88 @@ update_project_timer() {
     # Special case: Only migrate time from "Untitled" if the new project doesn't already exist
     if [[ "$current_project" == "Untitled" && "$project_name" != "Untitled" ]]; then
       # Check if the target project already exists in our tracking
-      local project_exists=$(echo "$timer_state" | jq ".projects[\"$project_name\"] != null")
+      local project_exists=$(echo "$timer_state" | jq --arg name "$project_name" '.projects[$name] != null')
       
       if [[ "$project_exists" == "false" ]]; then
         # This is likely a save of a new project - migrate the time
         local untitled_time=$(echo "$timer_state" | jq -r '.projects["Untitled"] // 0')
+        debug_log "Migrating time from Untitled to $project_name: $untitled_time seconds"
+        
         local updated_state=$(echo "$timer_state" | jq --arg name "$project_name" --arg time "$untitled_time" '.projects[$name] = ($time|tonumber)')
         updated_state=$(echo "$updated_state" | jq --arg name "$project_name" '.current_project = $name')
-        update_timer_state "$updated_state"
+        write_timer_state "$updated_state"
         
         # Keep running state
         local running_state=$(echo "$timer_state" | jq -r '.running')
         updated_state=$(echo "$updated_state" | jq --arg state "$running_state" '.running = ($state=="true")')
-        update_timer_state "$updated_state"
+        write_timer_state "$updated_state"
         
         # Remove the Untitled project entirely
         updated_state=$(echo "$updated_state" | jq 'del(.projects["Untitled"])')
-        update_timer_state "$updated_state"
+        write_timer_state "$updated_state"
         
-        debug_log "Migrated time from Untitled to $project_name: $untitled_time seconds"
+        debug_log "Successfully migrated time from Untitled to $project_name"
+        timer_state="$updated_state"
+        return
       else
-        # This is likely opening an existing project - keep its existing time
+        # This is switching to an existing project - just update current project
+        debug_log "Switching to existing project: $project_name"
         local updated_state=$(echo "$timer_state" | jq --arg name "$project_name" '.current_project = $name')
-        update_timer_state "$updated_state"
-        
-        # Remove the Untitled project entirely
-        updated_state=$(echo "$updated_state" | jq 'del(.projects["Untitled"])')
-        update_timer_state "$updated_state"
+        write_timer_state "$updated_state"
+        timer_state="$updated_state"
+        return
       fi
-    elif [[ "$current_project" != "Untitled" && "$project_name" == "Untitled" ]]; then
-      # We're switching to Untitled from a named project
-      # First save the previous project's time
-      if [[ "$current_project" != "Live" ]]; then
-        local prev_project_time=$(echo "$timer_state" | jq -r ".projects[\"$current_project\"] // 0")
-        local updated_state=$(echo "$timer_state" | jq ".projects[\"$current_project\"] = $prev_project_time")
-      else
-        local updated_state=$(echo "$timer_state")
-      fi
-      
-      # Start fresh with Untitled project
-      updated_state=$(echo "$updated_state" | jq '.projects["Untitled"] = 0')
-      updated_state=$(echo "$updated_state" | jq '.current_project = "Untitled"')
-      updated_state=$(echo "$updated_state" | jq '.running = true')
-      update_timer_state "$updated_state"
     else
-      # Standard project change handling
-      # Save the previous project's time
-      if [[ ! -z "$current_project" && "$current_project" != "Live" ]]; then
-        local prev_project_time=$(echo "$timer_state" | jq -r ".projects[\"$current_project\"] // 0")
-        local updated_state=$(echo "$timer_state" | jq ".projects[\"$current_project\"] = $prev_project_time")
-        
-        # If we're leaving Untitled, remove it entirely
-        if [[ "$current_project" == "Untitled" ]]; then
-          updated_state=$(echo "$updated_state" | jq 'del(.projects["Untitled"])')
-        fi
-        
-        update_timer_state "$updated_state"
-      else
-        # Coming from "Live" placeholder, just update current project
-        local updated_state=$(echo "$timer_state")
-      fi
+      # Regular project change
+      debug_log "Regular project change"
       
-      # Update current project
-      local updated_state=$(echo "$timer_state" | jq --arg name "$project_name" '.current_project = $name')
-      update_timer_state "$updated_state"
+      # Get all projects data
+      local projects_data=$(echo "$timer_state" | jq '.projects')
+      
+      # Create a new state with the updated project
+      local new_state=$(echo '{
+        "running": '"$running"',
+        "current_project": "'"$project_name"'",
+        "projects": '"$projects_data"'
+      }')
       
       # Initialize this project if it doesn't exist yet
-      local project_exists=$(echo "$updated_state" | jq ".projects[\"$project_name\"] != null")
+      local project_exists=$(echo "$new_state" | jq --arg name "$project_name" '.projects[$name] != null')
       if [[ "$project_exists" == "false" ]]; then
-        updated_state=$(echo "$updated_state" | jq --arg name "$project_name" '.projects[$name] = 0')
+        debug_log "Initializing new project: $project_name"
+        new_state=$(echo "$new_state" | jq --arg name "$project_name" '.projects[$name] = 0')
         # Auto-start timer for new projects
-        updated_state=$(echo "$updated_state" | jq '.running = true')
-        update_timer_state "$updated_state"
+        new_state=$(echo "$new_state" | jq '.running = true')
+        running="true"
       fi
+      
+      write_timer_state "$new_state"
+      timer_state="$new_state"
     fi
-    
-    # Reload the timer state after changes
-    timer_state=$(cat "$TIMER_STATE_FILE")
   fi
   
   # Get current elapsed time for this project
-  local elapsed_time=$(echo "$timer_state" | jq -r ".projects[\"$project_name\"] // 0")
+  local elapsed_time=$(echo "$timer_state" | jq -r --arg name "$project_name" '.projects[$name] // 0')
+  debug_log "Current elapsed time for '$project_name': $elapsed_time seconds"
   
   # If timer is running, update the elapsed time
   if [[ "$running" == "true" ]]; then
+    debug_log "Timer is running, incrementing time"
     ((elapsed_time++))
-    local updated_state=$(echo "$timer_state" | jq --arg name "$project_name" ".projects[\$name] = $elapsed_time")
-    update_timer_state "$updated_state"
+    debug_log "Incremented time to $elapsed_time seconds"
+    
+    # Update the time for this project
+    local new_state=$(echo "$timer_state" | jq --arg name "$project_name" --argjson time "$elapsed_time" '.projects[$name] = $time')
+    
+    # Write the updated state back to the file
+    write_timer_state "$new_state"
+    
+    # Update our in-memory copy
+    timer_state="$new_state"
+    
+    debug_log "Updated timer state file with new time"
+  else
+    debug_log "Timer is not running, time stays at $elapsed_time seconds"
   fi
   
   # Format the time for display
@@ -268,24 +452,56 @@ update_project_timer() {
   
   # Update the display
   debug_log "Updating display: project=$project_name, time=$formatted_time, icon=$status_indicator"
-  sketchybar --set ableton_timer label=""
+  sketchybar --set ableton_timer label="$project_name - $formatted_time"
   sketchybar --set ableton_timer_toggle label="$status_indicator"
+  
+  debug_log "=== update_project_timer END ==="
 }
 
 # Function to toggle the timer state
 toggle_timer() {
-  local timer_state=$(cat "$TIMER_STATE_FILE")
+  debug_log "=== toggle_timer START ==="
+  
+  # Get the current timer state
+  local timer_state=$(get_timer_state)
+  debug_log "Current timer state: $timer_state"
+  
+  # Get the current running state
   local running=$(echo "$timer_state" | jq -r '.running')
+  debug_log "Current running state: $running"
   
   # Toggle the running state
   if [[ "$running" == "true" ]]; then
-    local updated_state=$(echo "$timer_state" | jq '.running = false')
+    debug_log "Changing running state to false"
+    running="false"
   else
-    local updated_state=$(echo "$timer_state" | jq '.running = true')
+    debug_log "Changing running state to true"
+    running="true"
   fi
   
-  update_timer_state "$updated_state"
+  # Create the updated state
+  local updated_state=$(echo "$timer_state" | jq ".running = $running")
+  debug_log "Updated state: $updated_state"
+  
+  # Write the new state to file
+  write_timer_state "$updated_state"
+  
+  # Set the manual override flag
+  # When manually toggled to off, enable override to prevent auto-resume
+  # When manually toggled to on, disable override to allow normal auto behavior
+  local current_time=$(date +%s)
+  local override_enabled=$([[ "$running" == "false" ]] && echo "true" || echo "false")
+  local new_override=$(echo '{"enabled": '"$override_enabled"', "timestamp": '"$current_time"'}')
+  write_manual_override "$new_override"
+  debug_log "Set manual override to: $new_override"
+  
+  # Update the display immediately
+  local status_indicator=$([ "$running" == "true" ] && echo "$PAUSE_ICON" || echo "$RESUME_ICON")
+  sketchybar --set ableton_timer_toggle label="$status_indicator"
+  
+  debug_log "Updated timer state, now calling update_project_timer"
   update_project_timer
+  debug_log "=== toggle_timer END ==="
 }
 
 # Initialize the timer widget (called when Sketchybar starts)
@@ -293,12 +509,14 @@ initialize_timer_widget() {
   debug_log "Initializing timer widget"
   # Add the timer item to Sketchybar
   sketchybar --add item ableton_timer right \
-             --set ableton_timer drawing=off \
-             --set ableton_timer update_freq=1 \
-             --set ableton_timer script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh update" \
-             --set ableton_timer label="" \
-             --set ableton_timer width=0 \
-             --set ableton_timer icon.drawing=off
+           --set ableton_timer drawing=off \
+           --set ableton_timer update_freq=1 \
+           --set ableton_timer script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh update" \
+           --set ableton_timer label.drawing=off \
+           --set ableton_timer label="" \
+           --set ableton_timer width=0 \
+           --set ableton_timer icon.drawing=off \
+           --set ableton_timer background.drawing=off
   
   # Add the start/stop toggle button next to front app
   sketchybar --add item ableton_timer_toggle left \

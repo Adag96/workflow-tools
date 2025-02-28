@@ -42,10 +42,43 @@ get_ableton_timer() {
   # Path to the timer state file
   TIMER_STATE_FILE="$HOME/.config/sketchybar/timer_data/timer_state.json"
   
+  # Log for debugging
+  echo "$(date): Starting Ableton timer in front_app.sh" >> /tmp/ableton_timer_debug.log
+  
+  # Initial read of timer state
+  if [ -f "$TIMER_STATE_FILE" ]; then
+    # Use jq to extract current project and time
+    local project=$(jq -r '.current_project' "$TIMER_STATE_FILE")
+    local time=$(jq -r ".projects[\"$project\"] // 0" "$TIMER_STATE_FILE")
+    
+    echo "$(date): Initial project=$project, time=$time" >> /tmp/ableton_timer_debug.log
+    
+    # Set initial label
+    if [[ -n "$project" && "$project" != "null" && "$project" != "Live" ]]; then
+      local label="$project - $(format_time "$time")"
+      echo "$(date): Setting initial label to '$label'" >> /tmp/ableton_timer_debug.log
+      sketchybar --set front_app label="$label"
+    else
+      echo "$(date): No valid initial project, using default" >> /tmp/ableton_timer_debug.log
+    fi
+  else
+    echo "$(date): Timer state file not found" >> /tmp/ableton_timer_debug.log
+  fi
+  
   # Continuously update while Ableton is the front app
-  while [ "$(osascript -e 'tell application "System Events" to get name of first process whose frontmost is true')" = "Live" ]; do
+  while true; do
+    # Check if Ableton is still the frontmost app
+    local frontmost=$(osascript -e 'tell application "System Events" to get name of first process whose frontmost is true' 2>/dev/null || echo "")
+    echo "$(date): Frontmost app: $frontmost" >> /tmp/ableton_timer_debug.log
+    
+    if [[ "$frontmost" != "Live" ]]; then
+      echo "$(date): Ableton is no longer frontmost, exiting timer loop" >> /tmp/ableton_timer_debug.log
+      break
+    fi
+    
     # Check if Ableton is running
     if ! pgrep -x "Live" > /dev/null; then
+      echo "$(date): Ableton is no longer running, exiting timer loop" >> /tmp/ableton_timer_debug.log
       break
     fi
     
@@ -55,21 +88,32 @@ get_ableton_timer() {
       local project=$(jq -r '.current_project' "$TIMER_STATE_FILE")
       local time=$(jq -r ".projects[\"$project\"] // 0" "$TIMER_STATE_FILE")
       
+      echo "$(date): Updated project=$project, time=$time" >> /tmp/ableton_timer_debug.log
+      
       # Construct label with different font weights
-      local label="$project - $(format_time "$time")"
-      
-      # Update Sketchybar with current timer
-      sketchybar --set front_app label="$label"
-      
-      # Wait a second before next update
-      sleep 1
+      if [[ -n "$project" && "$project" != "null" && "$project" != "Live" ]]; then
+        local label="$project - $(format_time "$time")"
+        echo "$(date): Setting label to '$label'" >> /tmp/ableton_timer_debug.log
+        sketchybar --set front_app label="$label"
+      else
+        echo "$(date): No valid project found, using default label" >> /tmp/ableton_timer_debug.log
+        sketchybar --set front_app label="Live"
+      fi
     else
+      echo "$(date): Timer state file not found during update" >> /tmp/ableton_timer_debug.log
       break
     fi
+    
+    # Wait a second before next update
+    sleep 1
   done
+  
+  echo "$(date): Exited Ableton timer loop" >> /tmp/ableton_timer_debug.log
 }
 
 if [ "$SENDER" = "front_app_switched" ]; then
+  echo "$(date): Front app switched to: $INFO" >> /tmp/ableton_timer_debug.log
+  
   # Get the app icon
   icon="$($CONFIG_DIR/plugins/icon_map_fn.sh "$INFO")"
   
@@ -78,6 +122,12 @@ if [ "$SENDER" = "front_app_switched" ]; then
   
   # If it's Ableton Live, start timer update in background
   if [ "$INFO" = "Live" ]; then
+    echo "$(date): Detected Live as frontmost app, starting timer" >> /tmp/ableton_timer_debug.log
+    
+    # Kill any existing timer processes to avoid duplicates
+    pkill -f "get_ableton_timer" 2>/dev/null
+    
+    # Start timer in background
     get_ableton_timer &
   fi
 fi

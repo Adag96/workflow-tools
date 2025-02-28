@@ -26,13 +26,13 @@ export RESUME_TIMER_ICON="􀊖"
 export PAUSE_TIMER_ICON="􀊘"
 
 # WiFi widget icons
-WIFI_ICONS=(
-  wifi.high=􀽗
-  wifi.med=􀽗
-  wifi.low=􀽗
-  wifi.disconnected=􀽗
-)
+# WIFI_ICONS=(
+#   wifi.high=􀽗
+#   wifi.med=􀽗
+#   wifi.low=􀽗
+#   wifi.disconnected=􀽗
+# )
 
-for icon in "${WIFI_ICONS[@]}"; do
-  sketchybar --set $icon
-done
+# for icon in "${WIFI_ICONS[@]}"; do
+#   sketchybar --set $icon
+# done

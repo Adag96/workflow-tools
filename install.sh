@@ -1,26 +1,43 @@
 #!/bin/bash
+
+# Ensure workflow-tools repository path exists
+WORKFLOW_TOOLS_PATH="$HOME/workflow-tools"
+SKETCHYBAR_CONFIG_PATH="$HOME/.config/sketchybar"
+TIMER_DATA_DIR="$SKETCHYBAR_CONFIG_PATH/timer_data"
+
+# Create necessary directories
+mkdir -p "$SKETCHYBAR_CONFIG_PATH"
+mkdir -p "$TIMER_DATA_DIR"
+
 # Yabai configuration
 mkdir -p ~/.config/yabai
-ln -sf ~/workflow-tools/yabairc ~/.config/yabai/yabairc
+ln -sf "$WORKFLOW_TOOLS_PATH/yabairc" ~/.config/yabai/yabairc
 
 # Sketchybar configuration
-rm -rf ~/.config/sketchybar
-ln -sf ~/workflow-tools/sketchybar ~/.config/sketchybar
+rm -rf "$SKETCHYBAR_CONFIG_PATH"
+ln -sf "$WORKFLOW_TOOLS_PATH/sketchybar" "$SKETCHYBAR_CONFIG_PATH"
 
 # === Install Ableton Project Timer ===
 echo "Installing Ableton project timer..."
 
-# Create timer data directory (this won't be symlinked)
-mkdir -p ~/.config/sketchybar/timer_data
+# Centralized timer state file path
+CENTRAL_TIMER_STATE_FILE="$WORKFLOW_TOOLS_PATH/sketchybar/timer_data/timer_state.json"
+LOCAL_TIMER_STATE_FILE="$TIMER_DATA_DIR/timer_state.json"
 
-# Only create the timer state file if it DOES NOT already exist
-if [ ! -f ~/.config/sketchybar/timer_data/timer_state.json ]; then
+# Ensure the central timer state file exists with a default structure
+if [ ! -f "$CENTRAL_TIMER_STATE_FILE" ]; then
+  mkdir -p "$(dirname "$CENTRAL_TIMER_STATE_FILE")"
   echo '{
     "running": false,
-    "current_project": "",
-    "projects": {}
-  }' > ~/.config/sketchybar/timer_data/timer_state.json
-  echo "Created new timer state file"
-else
-  echo "Existing timer state file preserved"
+    "current_project": "Untitled",
+    "projects": {
+      "Untitled": 0
+    }
+  }' > "$CENTRAL_TIMER_STATE_FILE"
 fi
+
+# Create a symlink to the centralized timer state file
+# This ensures all machines use the same file
+ln -sf "$CENTRAL_TIMER_STATE_FILE" "$LOCAL_TIMER_STATE_FILE"
+
+echo "Ableton project timer installed successfully"
