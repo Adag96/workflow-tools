@@ -1,5 +1,4 @@
 #!/bin/bash
-
 # Ensure workflow-tools repository path exists
 WORKFLOW_TOOLS_PATH="$HOME/workflow-tools"
 SKETCHYBAR_CONFIG_PATH="$HOME/.config/sketchybar"
@@ -36,8 +35,8 @@ if [ ! -f "$CENTRAL_TIMER_STATE_FILE" ]; then
   }' > "$CENTRAL_TIMER_STATE_FILE"
 fi
 
-# Create a symlink to the centralized timer state file
-# This ensures all machines use the same file
-ln -sf "$CENTRAL_TIMER_STATE_FILE" "$LOCAL_TIMER_STATE_FILE"
+# Copy (not symlink) the timer state file
+# This allows local modifications while keeping a central reference
+cp "$CENTRAL_TIMER_STATE_FILE" "$LOCAL_TIMER_STATE_FILE"
 
 echo "Ableton project timer installed successfully"
