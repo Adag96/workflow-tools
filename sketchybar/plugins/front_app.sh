@@ -39,8 +39,8 @@ format_time() {
 
 # Check if Ableton is the current app and read its project timer
 get_ableton_timer() {
-  # Path to the timer state file
-  TIMER_STATE_FILE="$HOME/.config/sketchybar/timer_data/timer_state.json"
+  # Updated path to the timer state file - outside the repo
+  TIMER_STATE_FILE="$HOME/.local/share/sketchybar_timer_data/timer_state.json"
   
   # Log for debugging
   echo "$(date): Starting Ableton timer in front_app.sh" >> /tmp/ableton_timer_debug.log
@@ -54,13 +54,10 @@ get_ableton_timer() {
     echo "$(date): Initial project=$project, time=$time" >> /tmp/ableton_timer_debug.log
     
     # Set initial label
-    if [[ -n "$project" && "$project" != "null" && "$project" != "Live" ]]; then
-      local label="$project - $(format_time "$time")"
-      echo "$(date): Setting initial label to '$label'" >> /tmp/ableton_timer_debug.log
-      sketchybar --set front_app label="$label"
-    else
-      echo "$(date): No valid initial project, using default" >> /tmp/ableton_timer_debug.log
-    fi
+    local formatted_time=$(format_time "$time")
+    local label="Live - $formatted_time"
+    echo "$(date): Setting initial label to '$label'" >> /tmp/ableton_timer_debug.log
+    sketchybar --set front_app label="$label"
   else
     echo "$(date): Timer state file not found" >> /tmp/ableton_timer_debug.log
   fi
@@ -87,18 +84,28 @@ get_ableton_timer() {
       # Use jq to extract current project and time
       local project=$(jq -r '.current_project' "$TIMER_STATE_FILE")
       local time=$(jq -r ".projects[\"$project\"] // 0" "$TIMER_STATE_FILE")
+      local running=$(jq -r '.running' "$TIMER_STATE_FILE")
       
-      echo "$(date): Updated project=$project, time=$time" >> /tmp/ableton_timer_debug.log
+      echo "$(date): Updated project=$project, time=$time, running=$running" >> /tmp/ableton_timer_debug.log
       
-      # Construct label with different font weights
-      if [[ -n "$project" && "$project" != "null" && "$project" != "Live" ]]; then
-        local label="$project - $(format_time "$time")"
-        echo "$(date): Setting label to '$label'" >> /tmp/ableton_timer_debug.log
-        sketchybar --set front_app label="$label"
-      else
-        echo "$(date): No valid project found, using default label" >> /tmp/ableton_timer_debug.log
-        sketchybar --set front_app label="Live"
+      # Format time
+      local formatted_time=$(format_time "$time")
+      
+      # If the timer is running, increment time and write back (since our main script might not be running)
+      if [[ "$running" == "true" ]]; then
+        # Increment time by 1 second
+        time=$((time + 1))
+        # Update the time in the file
+        jq --arg name "$project" --argjson time "$time" '.projects[$name] = $time' "$TIMER_STATE_FILE" > /tmp/timer_tmp.json
+        mv /tmp/timer_tmp.json "$TIMER_STATE_FILE"
+        # Update the formatted time
+        formatted_time=$(format_time "$time")
       fi
+      
+      # Set the label
+      local label="Live - $formatted_time"
+      echo "$(date): Setting label to '$label'" >> /tmp/ableton_timer_debug.log
+      sketchybar --set front_app label="$label"
     else
       echo "$(date): Timer state file not found during update" >> /tmp/ableton_timer_debug.log
       break
