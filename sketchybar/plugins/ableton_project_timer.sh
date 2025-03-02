@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Create necessary files for storing project data if they don't exist
-TIMER_DATA_DIR="$HOME/.config/sketchybar/timer_data"
+# Use a location outside the repo structure
+TIMER_DATA_DIR="$HOME/.local/share/sketchybar_timer_data"
 TIMER_STATE_FILE="$TIMER_DATA_DIR/timer_state.json"
 LAST_ABLETON_STATE_FILE="$TIMER_DATA_DIR/last_ableton_state.json"
 MANUAL_OVERRIDE_FILE="$TIMER_DATA_DIR/manual_override.json"
@@ -308,15 +309,13 @@ update_project_timer() {
   # If Ableton isn't running, hide the widget and exit
   if [[ "$ableton_running" == "false" ]]; then
     debug_log "Ableton not running, hiding widgets"
-    sketchybar --set ableton_timer drawing=off
     sketchybar --set ableton_timer_toggle drawing=off
     debug_log "=== update_project_timer END ==="
     return
   fi
   
-  # Ableton is running, show the widget
-  debug_log "Ableton is running, showing widgets"
-  sketchybar --set ableton_timer drawing=on
+  # Ableton is running, show the toggle button
+  debug_log "Ableton is running, showing toggle button"
   sketchybar --set ableton_timer_toggle drawing=on
   
   # Auto-pause timer if Ableton loses focus
@@ -450,10 +449,19 @@ update_project_timer() {
   # Icon shows the action that will happen when clicked
   local status_indicator=$([ "$running" == "true" ] && echo "$PAUSE_ICON" || echo "$RESUME_ICON")
   
-  # Update the display
-  debug_log "Updating display: project=$project_name, time=$formatted_time, icon=$status_indicator"
-  sketchybar --set ableton_timer label="$project_name - $formatted_time"
+  # Update the timer toggle button
+  debug_log "Updating timer toggle button: $status_indicator"
   sketchybar --set ableton_timer_toggle label="$status_indicator"
+  
+  # Update the front_app label when Ableton is in focus
+  if [[ "$ableton_focused" == "true" && "$project_name" != "Live" ]]; then
+    debug_log "Updating front_app label to show project and time"
+    local front_app_label="Live - $formatted_time"
+    sketchybar --set front_app label="$front_app_label"
+  elif [[ "$ableton_focused" == "true" && "$project_name" == "Live" ]]; then
+    debug_log "Setting front_app label to show just Live with time"
+    sketchybar --set front_app label="Live - $formatted_time" 
+  fi
   
   debug_log "=== update_project_timer END ==="
 }
@@ -507,29 +515,30 @@ toggle_timer() {
 # Initialize the timer widget (called when Sketchybar starts)
 initialize_timer_widget() {
   debug_log "Initializing timer widget"
-  # Add the timer item to Sketchybar
-  sketchybar --add item ableton_timer right \
-           --set ableton_timer drawing=off \
-           --set ableton_timer update_freq=1 \
-           --set ableton_timer script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh update" \
-           --set ableton_timer label.drawing=off \
-           --set ableton_timer label="" \
-           --set ableton_timer width=0 \
-           --set ableton_timer icon.drawing=off \
-           --set ableton_timer background.drawing=off
   
-  # Add the start/stop toggle button next to front app
+  # Create a dummy timer item to keep track of updates
+  sketchybar --add item ableton_timer right \
+             --set ableton_timer drawing=off \
+             --set ableton_timer update_freq=1 \
+             --set ableton_timer script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh update" \
+             --set ableton_timer background.drawing=off \
+             --set ableton_timer icon.drawing=off \
+             --set ableton_timer label.drawing=off \
+             --set ableton_timer width=0
+  
+  # Add the toggle button
   sketchybar --add item ableton_timer_toggle left \
              --set ableton_timer_toggle drawing=off \
              --set ableton_timer_toggle \
-                   label.padding=0 \
-                   icon.padding_left=0 \
-                   icon.padding_right=0 \
-                   icon.font="$ICON_FONT:Semibold:18.0" \
-                   background.corner_radius=50 \
-                   padding.left=5 \
-                   padding.right=0 \
-                   align=center \
+                   label.drawing=on \
+                   icon.drawing=off \
+                   label.padding_left=5 \
+                   label.padding_right=5 \
+                   background.color=$ACTIVE_SPACE_ITEM_COLOR \
+                   background.drawing=on \
+                   padding_left=3 \
+                   padding_right=3 \
+                   align=left \
              --set ableton_timer_toggle click_script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh toggle" \
              --set ableton_timer_toggle label="$RESUME_ICON" \
              --set ableton_timer_toggle associated_display=active
