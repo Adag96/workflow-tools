@@ -2,139 +2,16 @@
 
 source "$CONFIG_DIR/fonts.sh"  # Loads all defined fonts
 
-# Function to format time matching the Ableton timer script
-format_time() {
-  local time=$1
-  local hours=$((time / 3600))
-  local minutes=$(( (time % 3600) / 60 ))
-  local seconds=$((time % 60))
-  
-  # Handle different formatting cases
-  if [ $hours -eq 0 ]; then
-    # Less than an hour
-    if [ $minutes -eq 0 ]; then
-      # Less than a minute
-      if [ $seconds -lt 10 ]; then
-        printf "0:0%d" $seconds
-      else
-        printf "0:%d" $seconds
-      fi
-    else
-      # Minutes and seconds
-      if [ $minutes -lt 10 ]; then
-        printf "%d:%02d" $minutes $seconds
-      else
-        printf "%d:%02d" $minutes $seconds
-      fi
-    fi
-  else
-    # Hours, minutes, and seconds
-    if [ $hours -lt 10 ]; then
-      printf "%d:%02d:%02d" $hours $minutes $seconds
-    else
-      printf "%02d:%02d:%02d" $hours $minutes $seconds
-    fi
-  fi
-}
-
-# Check if Ableton is the current app and read its project timer
-get_ableton_timer() {
-  # Updated path to the timer state file - outside the repo
-  TIMER_STATE_FILE="$HOME/.local/share/sketchybar_timer_data/timer_state.json"
-  
-  # Log for debugging
-  echo "$(date): Starting Ableton timer in front_app.sh" >> /tmp/ableton_timer_debug.log
-  
-  # Initial read of timer state
-  if [ -f "$TIMER_STATE_FILE" ]; then
-    # Use jq to extract current project and time
-    local project=$(jq -r '.current_project' "$TIMER_STATE_FILE")
-    local time=$(jq -r ".projects[\"$project\"] // 0" "$TIMER_STATE_FILE")
-    
-    echo "$(date): Initial project=$project, time=$time" >> /tmp/ableton_timer_debug.log
-    
-    # Set initial label
-    local formatted_time=$(format_time "$time")
-    local label="Live - $formatted_time"
-    echo "$(date): Setting initial label to '$label'" >> /tmp/ableton_timer_debug.log
-    sketchybar --set front_app label="$label"
-  else
-    echo "$(date): Timer state file not found" >> /tmp/ableton_timer_debug.log
-  fi
-  
-  # Continuously update while Ableton is the front app
-  while true; do
-    # Check if Ableton is still the frontmost app
-    local frontmost=$(osascript -e 'tell application "System Events" to get name of first process whose frontmost is true' 2>/dev/null || echo "")
-    echo "$(date): Frontmost app: $frontmost" >> /tmp/ableton_timer_debug.log
-    
-    if [[ "$frontmost" != "Live" ]]; then
-      echo "$(date): Ableton is no longer frontmost, exiting timer loop" >> /tmp/ableton_timer_debug.log
-      break
-    fi
-    
-    # Check if Ableton is running
-    if ! pgrep -x "Live" > /dev/null; then
-      echo "$(date): Ableton is no longer running, exiting timer loop" >> /tmp/ableton_timer_debug.log
-      break
-    fi
-    
-    # Read timer state
-    if [ -f "$TIMER_STATE_FILE" ]; then
-      # Use jq to extract current project and time
-      local project=$(jq -r '.current_project' "$TIMER_STATE_FILE")
-      local time=$(jq -r ".projects[\"$project\"] // 0" "$TIMER_STATE_FILE")
-      local running=$(jq -r '.running' "$TIMER_STATE_FILE")
-      
-      echo "$(date): Updated project=$project, time=$time, running=$running" >> /tmp/ableton_timer_debug.log
-      
-      # Format time
-      local formatted_time=$(format_time "$time")
-      
-      # If the timer is running, increment time and write back (since our main script might not be running)
-      if [[ "$running" == "true" ]]; then
-        # Increment time by 1 second
-        time=$((time + 1))
-        # Update the time in the file
-        jq --arg name "$project" --argjson time "$time" '.projects[$name] = $time' "$TIMER_STATE_FILE" > /tmp/timer_tmp.json
-        mv /tmp/timer_tmp.json "$TIMER_STATE_FILE"
-        # Update the formatted time
-        formatted_time=$(format_time "$time")
-      fi
-      
-      # Set the label
-      local label="Live - $formatted_time"
-      echo "$(date): Setting label to '$label'" >> /tmp/ableton_timer_debug.log
-      sketchybar --set front_app label="$label"
-    else
-      echo "$(date): Timer state file not found during update" >> /tmp/ableton_timer_debug.log
-      break
-    fi
-    
-    # Wait a second before next update
-    sleep 1
-  done
-  
-  echo "$(date): Exited Ableton timer loop" >> /tmp/ableton_timer_debug.log
-}
-
 if [ "$SENDER" = "front_app_switched" ]; then
-  echo "$(date): Front app switched to: $INFO" >> /tmp/ableton_timer_debug.log
+  echo "$(date): Front app switched to: $INFO" >> /tmp/front_app_debug.log
   
   # Get the app icon
   icon="$($CONFIG_DIR/plugins/icon_map_fn.sh "$INFO")"
   
-  # Set the label to the current app name
-  sketchybar --set "$NAME" label="$INFO" icon="$icon"
+  # Always set the icon for all apps
+  sketchybar --set "$NAME" icon="$icon"
   
-  # If it's Ableton Live, start timer update in background
-  if [ "$INFO" = "Live" ]; then
-    echo "$(date): Detected Live as frontmost app, starting timer" >> /tmp/ableton_timer_debug.log
-    
-    # Kill any existing timer processes to avoid duplicates
-    pkill -f "get_ableton_timer" 2>/dev/null
-    
-    # Start timer in background
-    get_ableton_timer &
-  fi
+  # Always set the label for all apps
+  # The Ableton timer will overwrite this label for Live when it's ready
+  sketchybar --set "$NAME" label="$INFO"
 fi

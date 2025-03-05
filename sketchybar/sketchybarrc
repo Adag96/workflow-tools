@@ -56,6 +56,22 @@ sketchybar --default "${default[@]}"
 source $ITEM_DIR/spaces.sh
 source $ITEM_DIR/front_app.sh
 
+# Add the toggle button
+  sketchybar --add item ableton_timer_toggle left \
+             --set ableton_timer_toggle drawing=off \
+             --set ableton_timer_toggle \
+                   label.drawing=on \
+                   label.padding_right=8 \
+                   label.padding_left=6 \
+                   icon.drawing=off \
+                   background.color=$ACTIVE_SPACE_ITEM_COLOR \
+                   background.drawing=on \
+                   padding_left=-3 \
+                   padding_right=0 \
+             --set ableton_timer_toggle click_script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh toggle" \
+             --set ableton_timer_toggle label="$RESUME_ICON" \
+             --set ableton_timer_toggle associated_display=active
+
 sketchybar -m --add item yabai_mode left \
               --set yabai_mode \
                 label.drawing=off \
@@ -69,13 +85,16 @@ sketchybar -m --add item yabai_mode left \
               --set yabai_mode click_script="~/.config/sketchybar/plugins/yabai_mode_click.sh" \
               --subscribe yabai_mode space_change
 
+
+
 #sketchybar -m --add       item               yabai_float left                                                    \
-              --add       event              window_focus                                                        \
-              --add       event              float_change                                                        \
-              --set       yabai_float        script="~/.config/sketchybar/plugins/yabai_float.sh"                \
-                                             click_script="~/.config/sketchybar/plugins/yabai_float_click.sh"    \
-                                             lazy=off                                                            \
-              --subscribe yabai_float        front_app_switched window_focus float_change                        \
+ #             --add       event              window_focus                                                        \
+ #             --add       event              float_change                                                        \
+ #             --set       yabai_float        script="~/.config/sketchybar/plugins/yabai_float.sh"                \
+  #                                           click_script="~/.config/sketchybar/plugins/yabai_float_click.sh"    \
+  #                                           lazy=off                                                            \
+  #            --subscribe yabai_float        front_app_switched window_focus float_change                        \
+
 
 
 

@@ -12,7 +12,7 @@ debug_log() {
   echo "$(date '+%Y-%m-%d %H:%M:%S') [${BASH_LINENO[0]}]: $1" >> /tmp/ableton_timer_debug.log
 }
 
-debug_log "Script started"
+debug_log "Script started with PID $$"
 
 # Define fallback icons first
 RESUME_ICON="▶︎"
@@ -74,6 +74,7 @@ initialize_timer_state() {
     echo '{
       "running": false,
       "current_project": "Untitled",
+      "last_update_time": 0,
       "projects": {
         "Untitled": 0
       }
@@ -252,13 +253,18 @@ get_timer_state() {
 update_project_timer() {
   debug_log "=== update_project_timer START ==="
   
+  # Get current time for timing measurements
+  local current_time=$(date +%s)
+  debug_log "Current time: $current_time"
+  
   # Get the current timer state
   local timer_state=$(get_timer_state)
   debug_log "Current timer state: $timer_state"
   
   local running=$(echo "$timer_state" | jq -r '.running')
   local current_project=$(echo "$timer_state" | jq -r '.current_project')
-  debug_log "Current state: running=$running, current_project=$current_project"
+  local last_update_time=$(echo "$timer_state" | jq -r '.last_update_time // 0')
+  debug_log "Current state: running=$running, current_project=$current_project, last_update_time=$last_update_time"
   
   # Get the manual override state
   local manual_override=$(get_manual_override)
@@ -278,7 +284,6 @@ update_project_timer() {
   # Get the last Ableton state
   local ableton_state=$(get_ableton_state)
   local last_running=$(echo "$ableton_state" | jq -r '.running')
-  local current_time=$(date +%s)
   
   # Check for Ableton restart (was not running before, is running now)
   if [[ "$last_running" == "false" && "$ableton_running" == "true" ]]; then
@@ -296,9 +301,13 @@ update_project_timer() {
       new_state=$(echo "$new_state" | jq '.projects["Live"] = 0')
     fi
     
+    # Update last_update_time
+    new_state=$(echo "$new_state" | jq --argjson time "$current_time" '.last_update_time = $time')
+    
     write_timer_state "$new_state"
     timer_state="$new_state"
     current_project="Live"
+    last_update_time=$current_time
   fi
   
   # Update and store the current Ableton state
@@ -306,16 +315,18 @@ update_project_timer() {
     '.running = ($running == "true") | .last_check_time = ($time | tonumber)')
   write_ableton_state "$new_ableton_state"
   
-  # If Ableton isn't running, hide the widget and exit
+  # If Ableton isn't running, hide the widgets and exit
   if [[ "$ableton_running" == "false" ]]; then
     debug_log "Ableton not running, hiding widgets"
+    sketchybar --set ableton_timer drawing=off
     sketchybar --set ableton_timer_toggle drawing=off
     debug_log "=== update_project_timer END ==="
     return
   fi
   
-  # Ableton is running, show the toggle button
-  debug_log "Ableton is running, showing toggle button"
+  # Ableton is running, show the widgets
+  debug_log "Ableton is running, showing widgets"
+  sketchybar --set ableton_timer drawing=off
   sketchybar --set ableton_timer_toggle drawing=on
   
   # Auto-pause timer if Ableton loses focus
@@ -323,8 +334,10 @@ update_project_timer() {
     debug_log "Ableton lost focus, auto-pausing timer"
     running="false"
     local updated_state=$(echo "$timer_state" | jq '.running = false')
+    updated_state=$(echo "$updated_state" | jq --argjson time "$current_time" '.last_update_time = $time')
     write_timer_state "$updated_state"
     timer_state="$updated_state"
+    last_update_time=$current_time
   fi
   
   # Auto-resume timer if Ableton gains focus (only if not manually paused)
@@ -332,8 +345,10 @@ update_project_timer() {
     debug_log "Ableton gained focus, auto-resuming timer"
     running="true"
     local updated_state=$(echo "$timer_state" | jq '.running = true')
+    updated_state=$(echo "$updated_state" | jq --argjson time "$current_time" '.last_update_time = $time')
     write_timer_state "$updated_state"
     timer_state="$updated_state"
+    last_update_time=$current_time
   fi
   
   # Get current project name
@@ -369,6 +384,7 @@ update_project_timer() {
         
         local updated_state=$(echo "$timer_state" | jq --arg name "$project_name" --arg time "$untitled_time" '.projects[$name] = ($time|tonumber)')
         updated_state=$(echo "$updated_state" | jq --arg name "$project_name" '.current_project = $name')
+        updated_state=$(echo "$updated_state" | jq --argjson time "$current_time" '.last_update_time = $time')
         write_timer_state "$updated_state"
         
         # Keep running state
@@ -382,14 +398,17 @@ update_project_timer() {
         
         debug_log "Successfully migrated time from Untitled to $project_name"
         timer_state="$updated_state"
-        return
+        current_project="$project_name"
+        last_update_time=$current_time
       else
         # This is switching to an existing project - just update current project
         debug_log "Switching to existing project: $project_name"
         local updated_state=$(echo "$timer_state" | jq --arg name "$project_name" '.current_project = $name')
+        updated_state=$(echo "$updated_state" | jq --argjson time "$current_time" '.last_update_time = $time')
         write_timer_state "$updated_state"
         timer_state="$updated_state"
-        return
+        current_project="$project_name"
+        last_update_time=$current_time
       fi
     else
       # Regular project change
@@ -402,6 +421,7 @@ update_project_timer() {
       local new_state=$(echo '{
         "running": '"$running"',
         "current_project": "'"$project_name"'",
+        "last_update_time": '"$current_time"',
         "projects": '"$projects_data"'
       }')
       
@@ -417,6 +437,8 @@ update_project_timer() {
       
       write_timer_state "$new_state"
       timer_state="$new_state"
+      current_project="$project_name"
+      last_update_time=$current_time
     fi
   fi
   
@@ -424,14 +446,22 @@ update_project_timer() {
   local elapsed_time=$(echo "$timer_state" | jq -r --arg name "$project_name" '.projects[$name] // 0')
   debug_log "Current elapsed time for '$project_name': $elapsed_time seconds"
   
-  # If timer is running, update the elapsed time
-  if [[ "$running" == "true" ]]; then
-    debug_log "Timer is running, incrementing time"
-    ((elapsed_time++))
+  # Calculate time difference since last update
+  local time_diff=$((current_time - last_update_time))
+  debug_log "Time difference since last update: $time_diff seconds"
+  
+  # If timer is running and at least 1 second has passed, increment the timer
+  if [[ "$running" == "true" && $time_diff -ge 1 ]]; then
+    debug_log "Timer is running, adding 1 second"
+    
+    # Only increment by 1 second each time to maintain accurate timing
+    elapsed_time=$((elapsed_time + 1))
     debug_log "Incremented time to $elapsed_time seconds"
     
     # Update the time for this project
     local new_state=$(echo "$timer_state" | jq --arg name "$project_name" --argjson time "$elapsed_time" '.projects[$name] = $time')
+    # Update the last update time
+    new_state=$(echo "$new_state" | jq --argjson time "$current_time" '.last_update_time = $time')
     
     # Write the updated state back to the file
     write_timer_state "$new_state"
@@ -441,7 +471,7 @@ update_project_timer() {
     
     debug_log "Updated timer state file with new time"
   else
-    debug_log "Timer is not running, time stays at $elapsed_time seconds"
+    debug_log "Timer is not running or less than 1 second passed, time stays at $elapsed_time seconds"
   fi
   
   # Format the time for display
@@ -453,14 +483,14 @@ update_project_timer() {
   debug_log "Updating timer toggle button: $status_indicator"
   sketchybar --set ableton_timer_toggle label="$status_indicator"
   
-  # Update the front_app label when Ableton is in focus
-  if [[ "$ableton_focused" == "true" && "$project_name" != "Live" ]]; then
+  # Update the right-side timer display
+  debug_log "Updating right-side timer display: $project_name - $formatted_time"
+  sketchybar --set ableton_timer label="$project_name - $formatted_time"
+  
+  # Update the front app label when Ableton is focused
+  if [[ "$ableton_focused" == "true" ]]; then
     debug_log "Updating front_app label to show project and time"
-    local front_app_label="Live - $formatted_time"
-    sketchybar --set front_app label="$front_app_label"
-  elif [[ "$ableton_focused" == "true" && "$project_name" == "Live" ]]; then
-    debug_log "Setting front_app label to show just Live with time"
-    sketchybar --set front_app label="Live - $formatted_time" 
+    sketchybar --set front_app label="$project_name - $formatted_time"
   fi
   
   debug_log "=== update_project_timer END ==="
@@ -469,6 +499,9 @@ update_project_timer() {
 # Function to toggle the timer state
 toggle_timer() {
   debug_log "=== toggle_timer START ==="
+  
+  # Get current time
+  local current_time=$(date +%s)
   
   # Get the current timer state
   local timer_state=$(get_timer_state)
@@ -489,6 +522,8 @@ toggle_timer() {
   
   # Create the updated state
   local updated_state=$(echo "$timer_state" | jq ".running = $running")
+  # Update the last update time
+  updated_state=$(echo "$updated_state" | jq --argjson time "$current_time" '.last_update_time = $time')
   debug_log "Updated state: $updated_state"
   
   # Write the new state to file
@@ -497,7 +532,6 @@ toggle_timer() {
   # Set the manual override flag
   # When manually toggled to off, enable override to prevent auto-resume
   # When manually toggled to on, disable override to allow normal auto behavior
-  local current_time=$(date +%s)
   local override_enabled=$([[ "$running" == "false" ]] && echo "true" || echo "false")
   local new_override=$(echo '{"enabled": '"$override_enabled"', "timestamp": '"$current_time"'}')
   write_manual_override "$new_override"
@@ -516,32 +550,14 @@ toggle_timer() {
 initialize_timer_widget() {
   debug_log "Initializing timer widget"
   
-  # Create a dummy timer item to keep track of updates
+  # Add the timer item to Sketchybar (visible on right side)
   sketchybar --add item ableton_timer right \
              --set ableton_timer drawing=off \
              --set ableton_timer update_freq=1 \
              --set ableton_timer script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh update" \
-             --set ableton_timer background.drawing=off \
-             --set ableton_timer icon.drawing=off \
-             --set ableton_timer label.drawing=off \
-             --set ableton_timer width=0
-  
-  # Add the toggle button
-  sketchybar --add item ableton_timer_toggle left \
-             --set ableton_timer_toggle drawing=off \
-             --set ableton_timer_toggle \
-                   label.drawing=on \
-                   icon.drawing=off \
-                   label.padding_left=5 \
-                   label.padding_right=5 \
-                   background.color=$ACTIVE_SPACE_ITEM_COLOR \
-                   background.drawing=on \
-                   padding_left=3 \
-                   padding_right=3 \
-                   align=left \
-             --set ableton_timer_toggle click_script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh toggle" \
-             --set ableton_timer_toggle label="$RESUME_ICON" \
-             --set ableton_timer_toggle associated_display=active
+             --set ableton_timer label="" \
+             --set ableton_timer width=dynamic \
+             --set ableton_timer icon.drawing=off
 
   debug_log "Timer widget initialization completed"
 }
