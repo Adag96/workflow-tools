@@ -35,14 +35,14 @@ Y_OFFSET=1
 # https://felixkratz.github.io/SketchyBar/config/items
 
 default=(
-  padding_left=5
-  padding_right=5
+  padding_left=4
+  padding_right=4
   icon.font="$ICON_FONT:Semibold:16.0"
   label.font="$TEXT_FONT:Semibold:15.0"
   icon.color=0xffffffff #white
   label.color=0xffffffff #white
   background.color=$RIGHT_ITEM_COLOR
-  background.corner_radius=12
+  background.corner_radius=9
   background.height=$BACKGROUND_HEIGHT
   y_offset=$Y_OFFSET
   icon.padding_left=10
@@ -66,8 +66,8 @@ source $ITEM_DIR/front_app.sh
                    icon.drawing=off \
                    background.color=$ACTIVE_SPACE_ITEM_COLOR \
                    background.drawing=on \
-                   padding_left=-3 \
-                   padding_right=0 \
+                   padding_left=0 \
+                   padding_right=3 \
              --set ableton_timer_toggle click_script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh toggle" \
              --set ableton_timer_toggle label="$RESUME_ICON" \
              --set ableton_timer_toggle associated_display=active
@@ -75,9 +75,10 @@ source $ITEM_DIR/front_app.sh
 sketchybar -m --add item yabai_mode left \
               --set yabai_mode \
                 label.drawing=off \
-                label.padding=0 \
-                width=40 \
-                icon.padding_left=6 \
+                label.padding_left=0 \
+                label.padding_right=0 \
+                width=35 \
+                icon.padding_left=5 \
                 icon.padding_right=0 \
                 icon.font="$ICON_FONT:Semibold:18.0" \
               --set yabai_mode update_freq=3 \
@@ -109,10 +110,7 @@ sketchybar --add item reload.bar right \
              icon.padding_left=6 \
              icon.padding_right=6 \
              icon.align=center \
-             padding_left=5 \
-             padding_right=0 \
              align=center \
-             background.corner_radius=50 \
              background.drawing=on \
              click_script="$PLUGIN_DIR/reload_sketchybar.sh" \
              label.drawing=off
