@@ -1,11 +1,15 @@
 #!/bin/bash
 
 # Yabai mode icons
-export BSP_ICON="􀇷"
-export STACK_ICON="􀏜"
+export BSP_ICON="􂧰"
+export STACK_ICON="􀤳"
 # Float icons
 export FLOAT_WINDOW_ON="􀈈" # icon for floating window
 export FLOAT_WINDOW_OFF="􀈆" # icon for tiled window
+
+# Yabai start/stop icons
+YABAI_RUNNING_ICON="􀷄"  
+YABAI_STOPPED_ICON="􀷃"  
 
 # Battery level icons
 export BATTERY_FULL="􀛨"

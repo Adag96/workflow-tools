@@ -2,7 +2,6 @@
 
 source "$HOME/.config/sketchybar/items/scheme.sh"
 get_colors "$(cat "$HOME/.cache/sketchybar/current_scheme")"
-source "$CONFIG_DIR/colors.sh" # Loads all defined colors
 source "$CONFIG_DIR/icons.sh"  # Loads all defined icons
 source "$CONFIG_DIR/fonts.sh"  # Loads all defined fonts
 
@@ -56,7 +55,7 @@ sketchybar --default "${default[@]}"
 source $ITEM_DIR/spaces.sh
 source $ITEM_DIR/front_app.sh
 
-# Add the toggle button
+# Add timer toggle button
   sketchybar --add item ableton_timer_toggle left \
              --set ableton_timer_toggle drawing=off \
              --set ableton_timer_toggle \
@@ -72,6 +71,7 @@ source $ITEM_DIR/front_app.sh
              --set ableton_timer_toggle label="$RESUME_ICON" \
              --set ableton_timer_toggle associated_display=active
 
+# Yabai mode toggle
 sketchybar -m --add item yabai_mode left \
               --set yabai_mode \
                 label.drawing=off \
@@ -80,13 +80,29 @@ sketchybar -m --add item yabai_mode left \
                 width=35 \
                 icon.padding_left=5 \
                 icon.padding_right=0 \
+                padding_right=2 \
                 icon.font="$ICON_FONT:Semibold:18.0" \
               --set yabai_mode update_freq=3 \
               --set yabai_mode script="~/.config/sketchybar/plugins/yabai_mode.sh" \
               --set yabai_mode click_script="~/.config/sketchybar/plugins/yabai_mode_click.sh" \
               --subscribe yabai_mode space_change
 
-
+# Yabai toggle button
+sketchybar --add item yabai.toggle left \
+           --set yabai.toggle \
+             width=28 \
+             icon.font="SF Symbols:Regular:17.0" \
+             icon.color=$LEFT_TEXT_COLOR \
+             icon.padding_left=0 \
+             icon.padding_right=2 \
+             icon.y_offset=1 \
+             align=center \
+             padding_left=6 \
+             background.drawing=on \
+             click_script="$PLUGIN_DIR/toggle_yabai.sh" \
+             label.drawing=off \
+             script="$PLUGIN_DIR/yabai_state_display.sh" \
+             update_freq=1
 
 #sketchybar -m --add       item               yabai_float left                                                    \
  #             --add       event              window_focus                                                        \
@@ -176,6 +192,13 @@ source $ITEM_DIR/cpu.sh
 source $ITEM_DIR/battery.sh
 source $ITEM_DIR/media.sh
 
+# Initialize the Yabai status file to match current state
+if pgrep -q "yabai"; then
+  echo "running" > /tmp/yabai_status
+else
+  echo "stopped" > /tmp/yabai_status
+  sketchybar --set yabai.toggle icon="$YABAI_STOPPED_ICON" icon.color=0xFFE06C75
+fi
 
 
 ##### Force all scripts to run the first time (never do this in a script) #####
