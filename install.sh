@@ -29,6 +29,15 @@ ln -sf "$WORKFLOW_TOOLS_PATH/yabairc" ~/.config/yabai/yabairc
 rm -rf "$SKETCHYBAR_CONFIG_PATH"
 ln -sf "$WORKFLOW_TOOLS_PATH/sketchybar" "$SKETCHYBAR_CONFIG_PATH"
 
+# Initialize Yabai status file
+if pgrep -q yabai; then
+  echo "running" > /tmp/yabai_status
+  echo "Initialized Yabai status as running"
+else
+  echo "stopped" > /tmp/yabai_status
+  echo "Initialized Yabai status as stopped"
+fi
+
 # === Install Ableton Project Timer ===
 echo "Installing Ableton project timer..."
 
