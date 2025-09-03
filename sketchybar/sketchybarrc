@@ -20,7 +20,8 @@ ITEM_DIR="$CONFIG_DIR/items"
 # If you are looking for other colors, see the color picker:
 # https://felixkratz.github.io/SketchyBar/config/tricks#color-picker
 
-sketchybar --bar position=top height=37 blur_radius=30 color=$BAR_COLOR
+sketchybar --bar position=top height=37 color=0x00000000
+#sketchybar --bar position=top height=37 blur_radius=30 color=$BAR_COLOR
 
 # Calculate y_offset for vertical centering
 BAR_HEIGHT=37
@@ -43,6 +44,7 @@ default=(
   background.color=$RIGHT_ITEM_COLOR
   background.corner_radius=9
   background.height=$BACKGROUND_HEIGHT
+  background.drawing=off 
   y_offset=$Y_OFFSET
   icon.padding_left=10
   icon.padding_right=4
@@ -64,7 +66,7 @@ source $ITEM_DIR/front_app.sh
                    label.padding_left=6 \
                    icon.drawing=off \
                    background.color=$ACTIVE_SPACE_ITEM_COLOR \
-                   background.drawing=on \
+                   background.drawing=off \
                    padding_left=0 \
                    padding_right=3 \
              --set ableton_timer_toggle click_script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh toggle" \
@@ -98,7 +100,7 @@ sketchybar --add item yabai.toggle left \
              icon.y_offset=1 \
              align=center \
              padding_left=6 \
-             background.drawing=on \
+             background.drawing=off \
              click_script="$PLUGIN_DIR/toggle_yabai.sh" \
              label.drawing=off \
              script="$PLUGIN_DIR/yabai_state_display.sh" \
@@ -128,6 +130,8 @@ sketchybar --add item reload.bar right \
              icon.align=center \
              align=center \
              background.drawing=on \
+             background.height=20 \
+             background.corner_radius=9 \
              click_script="$PLUGIN_DIR/reload_sketchybar.sh" \
              label.drawing=off
 
@@ -143,7 +147,8 @@ sketchybar --add item color_scheme right \
                  label.padding_right=0 \
                  label.padding_left=0 \
                  background.color=$RIGHT_ITEM_COLOR \
-                 background.height=27 \
+                 background.height=20 \
+                 background.corner_radius=9 \
                  background.drawing=on \
                  padding_left=0 \
                  padding_right=0 \
@@ -199,6 +204,21 @@ else
   echo "stopped" > /tmp/yabai_status
   sketchybar --set yabai.toggle icon="$YABAI_STOPPED_ICON" icon.color=0xFFE06C75
 fi
+
+
+# Add new background "pills" for left and right items
+sketchybar --add bracket left_bracket '/space\..*/' front_app ableton_timer_toggle yabai_mode yabai.toggle \
+           --set left_bracket background.color=$BAR_COLOR \
+                              background.height=$BACKGROUND_HEIGHT \
+                              background.corner_radius=9 \
+                              y_offset=$Y_OFFSET
+
+sketchybar --add bracket right_bracket reload.bar color_scheme clock calendar volume volume_icon cpu battery media \
+           --set right_bracket background.color=$BAR_COLOR \
+                               background.height=$BACKGROUND_HEIGHT \
+                               background.corner_radius=9 \
+                               y_offset=$Y_OFFSET
+
 
 
 ##### Force all scripts to run the first time (never do this in a script) #####
