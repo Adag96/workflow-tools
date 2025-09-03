@@ -29,7 +29,6 @@ Yabai -m mouse_drop_action swap
 Yabai -m rule --add app='^System Settings$' manage=off
 Yabai -m rule --add app='^Calculator$' manage=off
 yabai -m signal --add event=window_created app="^Blitzit$" action='yabai -m window $YABAI_WINDOW_ID --toggle float'
-Yabai -m rule --add app='^Live$' manage=off
 
 # Tell Yabai about SketchyBar to correct height
 Yabai -m config external_bar all:37:0
