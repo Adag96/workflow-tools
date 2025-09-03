@@ -11,13 +11,13 @@ case "$yabai_mode" in
     bsp)
     sketchybar -m --set yabai_mode icon="$BSP_ICON" \
                                   background.color=$LEFT_ITEM_COLOR \
-                                  background.drawing=on \
+                                  background.drawing=off \
                                   icon.color=$RIGHT_TEXT_COLOR
     ;;
     stack)
     sketchybar -m --set yabai_mode icon="$STACK_ICON" \
                                   background.color=$LEFT_ITEM_COLOR \
-                                  background.drawing=on \
+                                  background.drawing=off \
                                   icon.color=$RIGHT_TEXT_COLOR
     ;;
 esac

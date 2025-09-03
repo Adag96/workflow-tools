@@ -106,7 +106,7 @@ get_colors() {
       export RIGHT_TEXT_FEEDBACK_COLOR=0xff393552
 
       export MEDIA_COLOR=0xfff6c177
-      export ACCENT_COLOR=0xfff6c177
+      export ACCENT_COLOR=0xffeb6f92
       ;;
   esac
 }
