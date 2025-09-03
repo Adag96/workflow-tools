@@ -8,6 +8,7 @@ SCHEMES=(
   "KANDY"
   "DEUS"
   "BONEYARD"
+  "MOON"
 )
 
 COLOR_SCHEME_CACHE="$HOME/.cache/sketchybar/current_scheme"
@@ -83,7 +84,30 @@ get_colors() {
       # 0xffd89048 orange
       # 0xffdee5de white
       # 0xffaa2224 red
+      ;;
 
+    "MOON")
+      export BAR_COLOR=0x80414354
+      
+      # Set a darker background for items, and keep text light for contrast
+      export LEFT_ITEM_COLOR=0xff393552
+      export LEFT_ITEM_FEEDBACK_COLOR=0xff6e6a86
+      export LEFT_TEXT_COLOR=0xffe0def4
+      export LEFT_TEXT_FEEDBACK_COLOR=0xff393552
+
+      # Use a bright accent for the active space background
+      export ACTIVE_SPACE_ITEM_COLOR=0xffc4a7e7
+      export ACTIVE_SPACE_TEXT_COLOR=0xff232136
+
+      # Set a darker background for items, and keep text light for contrast
+      export RIGHT_ITEM_COLOR=0xff393552
+      export RIGHT_ITEM_FEEDBACK_COLOR=0xff6e6a86
+      export RIGHT_TEXT_COLOR=0xffe0def4
+      export RIGHT_TEXT_FEEDBACK_COLOR=0xff393552
+
+      export MEDIA_COLOR=0xfff6c177
+      export ACCENT_COLOR=0xfff6c177
+      ;;
   esac
 }
 
