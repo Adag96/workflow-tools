@@ -24,9 +24,13 @@ sketchybar --bar position=top height=37 color=0x00000000
 #sketchybar --bar position=top height=37 blur_radius=30 color=$BAR_COLOR
 
 # Calculate y_offset for vertical centering
-BAR_HEIGHT=37
-BACKGROUND_HEIGHT=26
+BAR_HEIGHT=44
+BACKGROUND_HEIGHT=28
+CORNER_RADIUS=14
 Y_OFFSET=0
+
+# Export variables so they're available to other scripts
+export CORNER_RADIUS
 
 
 ##### Changing Defaults #####
@@ -42,7 +46,7 @@ default=(
   icon.color=0xffffffff #white
   label.color=0xffffffff #white
   background.color=$RIGHT_ITEM_COLOR
-  background.corner_radius=9
+  background.corner_radius=$CORNER_RADIUS
   background.height=$BACKGROUND_HEIGHT
   background.drawing=off 
   y_offset=$Y_OFFSET
@@ -125,13 +129,11 @@ sketchybar --add item reload.bar right \
              icon=$RELOAD_ICON \
              icon.font="$ICON_FONT:Semibold:16.0" \
              icon.color=$RIGHT_TEXT_COLOR \
-             icon.padding_left=6 \
-             icon.padding_right=6 \
+             icon.padding_left=8 \
+             icon.padding_right=4 \
              icon.align=center \
              align=center \
-             background.drawing=on \
-             background.height=20 \
-             background.corner_radius=9 \
+             background.drawing=off \
              click_script="$PLUGIN_DIR/reload_sketchybar.sh" \
              label.drawing=off
 
@@ -141,15 +143,12 @@ sketchybar --add item color_scheme right \
                  icon=$SCHEME_ICON \
                  icon.font="$ICON_FONT:Semibold:16.0" \
                  icon.color=$RIGHT_TEXT_COLOR \
-                 icon.padding_left=8 \
-                 icon.padding_right=10 \
+                 icon.padding_left=4 \
+                 icon.padding_right=8 \
                  label="" \
                  label.padding_right=0 \
                  label.padding_left=0 \
-                 background.color=$RIGHT_ITEM_COLOR \
-                 background.height=20 \
-                 background.corner_radius=9 \
-                 background.drawing=on \
+                 background.drawing=off \
                  padding_left=0 \
                  padding_right=0 \
                  click_script="$HOME/.config/sketchybar/plugins/color_scheme_click.sh"
@@ -206,18 +205,27 @@ else
 fi
 
 
-# Add new background "pills" for left and right items
+# Add separate left and right background pills
+# Left pill: spaces, front app, and yabai controls
 sketchybar --add bracket left_bracket '/space\..*/' front_app ableton_timer_toggle yabai_mode yabai.toggle \
            --set left_bracket background.color=$BAR_COLOR \
                               background.height=$BACKGROUND_HEIGHT \
-                              background.corner_radius=9 \
+                              background.corner_radius=$CORNER_RADIUS \
                               y_offset=$Y_OFFSET
 
+# Right pill: system info and controls (including reload.bar and color_scheme for the concentric pill)
 sketchybar --add bracket right_bracket reload.bar color_scheme clock calendar volume volume_icon cpu battery media \
            --set right_bracket background.color=$BAR_COLOR \
                                background.height=$BACKGROUND_HEIGHT \
-                               background.corner_radius=9 \
+                               background.corner_radius=$CORNER_RADIUS \
                                y_offset=$Y_OFFSET
+
+# Add smaller control buttons pill on top of right bracket (concentric)
+sketchybar --add bracket control_bracket reload.bar color_scheme \
+           --set control_bracket background.color=$RIGHT_ITEM_COLOR \
+                                background.height=24 \
+                                background.corner_radius=$CORNER_RADIUS \
+                                y_offset=$Y_OFFSET
 
 
 

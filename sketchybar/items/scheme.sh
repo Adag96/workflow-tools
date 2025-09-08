@@ -3,6 +3,9 @@
 
 source "$CONFIG_DIR/icons.sh"  # Loads all defined icons
 
+# Import configuration variables
+CORNER_RADIUS=${CORNER_RADIUS:-14}  # Default to 14 if not set
+
 # Define the color schemes
 SCHEMES=(
   "KANDY"

@@ -7,7 +7,7 @@ Yabai -m config window_placement second_child
 yabai -m signal --add event=window_focused action="sketchybar -m --trigger window_focus &> /dev/null"
 
 # padding
-Yabai -m config top_padding 5
+Yabai -m config top_padding 0
 Yabai -m config bottom_padding 5
 Yabai -m config left_padding 5
 Yabai -m config right_padding 5
@@ -31,4 +31,4 @@ Yabai -m rule --add app='^Calculator$' manage=off
 yabai -m signal --add event=window_created app="^Blitzit$" action='yabai -m window $YABAI_WINDOW_ID --toggle float'
 
 # Tell Yabai about SketchyBar to correct height
-Yabai -m config external_bar all:37:0
+Yabai -m config external_bar all:44:0
