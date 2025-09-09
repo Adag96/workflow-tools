@@ -20,7 +20,7 @@ if [ "$SELECTED" = "true" ]; then
   # State: Active/Focused Space 
   # Show the space number without its own background (contained in bracket)
   sketchybar --set $NAME background.drawing=off \
-                         icon.color=$ACTIVE_SPACE_TEXT_COLOR \
+                         icon.color=$ACCENT_COLOR \
                          icon.font="SF Pro:Bold:$FONT_SIZE_LARGE.0" \
                          icon.padding_left=6 \
                          icon.padding_right=0
@@ -34,7 +34,7 @@ if [ "$SELECTED" = "true" ]; then
                                      background.color=$PILL_COLOR_4 \
                                      background.corner_radius=$RADIUS_L4 \
                                      background.height=$HEIGHT_L4 \
-                                     label.color=$ACTIVE_SPACE_TEXT_COLOR
+                                     label.color=$LEFT_TEXT_COLOR
   else
     sketchybar --set space_icons.$SID background.drawing=off
   fi
