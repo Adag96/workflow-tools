@@ -24,7 +24,8 @@ done
 
 sketchybar --add item space_separator left \
           --set space_separator icon=">" \
-                               icon.color=$LEFT_ITEM_COLOR \
+                               icon.color=$LEFT_TEXT_COLOR \
+                               icon.font="$TEXT_FONT:Bold:$FONT_SIZE_MEDIUM.0" \
                                icon.padding_left=4 \
                                label.drawing=off \
                                background.drawing=off \
