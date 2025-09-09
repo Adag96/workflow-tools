@@ -1,5 +1,13 @@
 #!/bin/sh
 
+# Load the dynamic sizing variables directly
+export SCALE_FACTOR=10
+BASE_UNIT_RAW=4
+export BASE_UNIT=$((BASE_UNIT_RAW * SCALE_FACTOR / 10))
+export RADIUS_L4=$((BASE_UNIT * 2))
+export HEIGHT_L4=$((BASE_UNIT * 5))
+export FONT_SIZE_LARGE=$((BASE_UNIT * 4))
+
 # Load the color scheme
 source "$HOME/.config/sketchybar/items/scheme.sh"
 current_scheme=$(cat "$COLOR_SCHEME_CACHE")
@@ -9,35 +17,55 @@ get_colors "$current_scheme"
 WINDOWS_COUNT=$(yabai -m query --spaces --space $SID | jq '.windows | length')
 
 if [ "$SELECTED" = "true" ]; then
-  # State: Active/Focused Space
-  # Show background pill with bold space number and app icons, with proper left padding
-  sketchybar --set $NAME background.drawing=on \
-                         background.color=$ACTIVE_SPACE_ITEM_COLOR \
-                         background.height=20 \
-                         background.corner_radius=$CORNER_RADIUS \
+  # State: Active/Focused Space 
+  # Show the space number without its own background (contained in bracket)
+  sketchybar --set $NAME background.drawing=off \
                          icon.color=$ACTIVE_SPACE_TEXT_COLOR \
-                         icon.font="SF Pro:Bold:16.0" \
+                         icon.font="SF Pro:Bold:$FONT_SIZE_LARGE.0" \
                          icon.padding_left=6 \
-                         icon.padding_right=0 \
-                         label.drawing=on \
-                         label.color=$ACTIVE_SPACE_TEXT_COLOR
+                         icon.padding_right=0
+  
+  # Show the concentric Pill Level 3 bracket (space number + icons)
+  sketchybar --set space_${SID}_bracket background.drawing=on
+  
+  # If this space has windows, show Pill Level 4 for icons (innermost)
+  if [ "$WINDOWS_COUNT" -gt 0 ]; then
+    sketchybar --set space_icons.$SID background.drawing=on \
+                                     background.color=$PILL_COLOR_4 \
+                                     background.corner_radius=$RADIUS_L4 \
+                                     background.height=$HEIGHT_L4 \
+                                     label.color=$ACTIVE_SPACE_TEXT_COLOR
+  else
+    sketchybar --set space_icons.$SID background.drawing=off
+  fi
+  
 elif [ "$WINDOWS_COUNT" -gt 0 ]; then
   # State: Occupied but Inactive Space
-  # No background, both space number and app icons in white color
+  # No backgrounds, space number in white color
   sketchybar --set $NAME background.drawing=off \
                          icon.color=$LEFT_TEXT_COLOR \
-                         icon.font="SF Pro:Regular:16.0" \
+                         icon.font="SF Pro:Regular:$FONT_SIZE_LARGE.0" \
                          icon.padding_left=0 \
-                         icon.padding_right=0 \
-                         label.drawing=on \
-                         label.color=$LEFT_TEXT_COLOR
+                         icon.padding_right=0
+  
+  # Hide the concentric bracket
+  sketchybar --set space_${SID}_bracket background.drawing=off
+  
+  # Show icons without background
+  sketchybar --set space_icons.$SID background.drawing=off \
+                                   label.color=$LEFT_TEXT_COLOR
 else
   # State: Empty and Inactive Space
-  # No background, space number in white, no app icons
+  # No backgrounds, space number in white
   sketchybar --set $NAME background.drawing=off \
                          icon.color=$LEFT_TEXT_COLOR \
-                         icon.font="SF Pro:Regular:16.0" \
+                         icon.font="SF Pro:Regular:$FONT_SIZE_LARGE.0" \
                          icon.padding_left=0 \
-                         icon.padding_right=0 \
-                         label.drawing=off
+                         icon.padding_right=0
+  
+  # Hide the concentric bracket
+  sketchybar --set space_${SID}_bracket background.drawing=off
+  
+  # Hide icons
+  sketchybar --set space_icons.$SID background.drawing=off
 fi

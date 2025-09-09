@@ -1,16 +1,25 @@
 #!/bin/bash
 
-SPACE_SIDS=(1 2 3 4 5 6 7 8 9 10)
+# Hard-coded to only support 4 spaces maximum
+SPACE_SIDS=(1 2 3 4)
 
 for sid in "${SPACE_SIDS[@]}"
 do
+   # Create the space number item
    sketchybar --add space space.$sid left \
               --set space.$sid space=$sid \
                                icon=$sid \
-                               label.font="sketchybar-app-font:Regular:16.0" \
-                               label.padding_right=20 \
-                               label.y_offset=-1 \
+                               label.drawing=off \
                                script="$PLUGIN_DIR/space.sh"
+   
+   # Create a separate item for space icons
+   sketchybar --add item space_icons.$sid left \
+              --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_MEDIUM.0" \
+                                    label.padding_right=$PADDING_M \
+                                    label.padding_left=$PADDING_M \
+                                    label.y_offset=-1 \
+                                    background.drawing=off \
+                                    icon.drawing=off
 done
 
 sketchybar --add item space_separator left \
