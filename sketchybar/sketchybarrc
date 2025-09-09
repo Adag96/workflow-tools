@@ -1,6 +1,62 @@
 #!/bin/bash
 
-source "$HOME/.config/sketchybar/items/scheme.sh"
+# ----------------------------------------------------
+# DYNAMIC SIZING & SPACING SYSTEM
+# ----------------------------------------------------
+
+# 1. THE MASTER CONTROL
+# Change this one value to scale the entire bar up or down.
+# Use integers: 10 = normal size, 12 = 20% larger, 8 = 20% smaller.
+export SCALE_FACTOR=10
+
+# 2. THE BASE UNIT
+# All measurements are derived from this. (Using 4px as our base)
+BASE_UNIT_RAW=4
+
+# 3. THE CALCULATED SCALE (using integer arithmetic)
+export BASE_UNIT=$((BASE_UNIT_RAW * SCALE_FACTOR / 10))
+
+# --- Padding Scale ---
+export PADDING_S=$((BASE_UNIT * 3 / 2))  # 6px @ scale 10
+export PADDING_M=$((BASE_UNIT * 2))      # 8px @ scale 10  
+export PADDING_L=$((BASE_UNIT * 3))      # 12px @ scale 10
+
+# --- Corner Radius Scale ---
+export RADIUS_L1=$((BASE_UNIT * 4))      # 16px @ scale 10
+export RADIUS_L2=$((BASE_UNIT * 3))      # 12px @ scale 10
+export RADIUS_L3=$((BASE_UNIT * 5 / 2))  # 10px @ scale 10
+export RADIUS_L4=$((BASE_UNIT * 2))      # 8px @ scale 10
+
+# --- Height Scale ---
+export HEIGHT_L1=$((BASE_UNIT * 11))     # 44px @ scale 10
+export HEIGHT_L2=$((BASE_UNIT * 7))      # 28px @ scale 10
+export HEIGHT_L3=$((BASE_UNIT * 6))      # 24px @ scale 10
+export HEIGHT_L4=$((BASE_UNIT * 5))      # 20px @ scale 10
+
+# --- Border Scale ---
+export BORDER_THIN=1                     # 1px
+export BORDER_THICK=2                    # 2px
+
+# --- Font Size Scale ---
+# Base font sizes that scale proportionally with SCALE_FACTOR
+export FONT_SIZE_SMALL=$((BASE_UNIT * 3))   # 12px @ scale 10
+export FONT_SIZE_MEDIUM=$((BASE_UNIT * 15 / 4))  # 15px @ scale 10  
+export FONT_SIZE_LARGE=$((BASE_UNIT * 4))   # 16px @ scale 10
+export FONT_SIZE_XL=$((BASE_UNIT * 17 / 4)) # 17px @ scale 10
+export FONT_SIZE_XXL=$((BASE_UNIT * 9 / 2)) # 18px @ scale 10
+
+# Export all variables for use in other scripts
+export SCALE_FACTOR BASE_UNIT PADDING_S PADDING_M PADDING_L
+export RADIUS_L1 RADIUS_L2 RADIUS_L3 RADIUS_L4
+export HEIGHT_L1 HEIGHT_L2 HEIGHT_L3 HEIGHT_L4
+export BORDER_THIN BORDER_THICK
+export FONT_SIZE_SMALL FONT_SIZE_MEDIUM FONT_SIZE_LARGE FONT_SIZE_XL FONT_SIZE_XXL
+
+# Set CONFIG_DIR for proper sourcing
+CONFIG_DIR="$HOME/workflow-tools/sketchybar"
+export CONFIG_DIR
+
+source "$CONFIG_DIR/items/scheme.sh"
 get_colors "$(cat "$HOME/.cache/sketchybar/current_scheme")"
 source "$CONFIG_DIR/icons.sh"  # Loads all defined icons
 source "$CONFIG_DIR/fonts.sh"  # Loads all defined fonts
@@ -20,18 +76,16 @@ ITEM_DIR="$CONFIG_DIR/items"
 # If you are looking for other colors, see the color picker:
 # https://felixkratz.github.io/SketchyBar/config/tricks#color-picker
 
-sketchybar --bar position=top height=37 color=0x00000000
-#sketchybar --bar position=top height=37 blur_radius=30 color=$BAR_COLOR
+sketchybar --bar position=top height=$HEIGHT_L1 color=0x00000000
 
-# Calculate y_offset for vertical centering
-BAR_HEIGHT=44
-BACKGROUND_HEIGHT=28
-CORNER_RADIUS=14
+# Legacy variables for backwards compatibility (now derived from dynamic system)
+BAR_HEIGHT=$HEIGHT_L1
+BACKGROUND_HEIGHT=$HEIGHT_L2
+CORNER_RADIUS=$RADIUS_L2
 Y_OFFSET=0
 
 # Export variables so they're available to other scripts
 export CORNER_RADIUS
-
 
 ##### Changing Defaults #####
 # We now change some default values, which are applied to all further items.
@@ -39,20 +93,20 @@ export CORNER_RADIUS
 # https://felixkratz.github.io/SketchyBar/config/items
 
 default=(
-  padding_left=4
-  padding_right=4
-  icon.font="$ICON_FONT:Semibold:16.0"
-  label.font="$TEXT_FONT:Semibold:15.0"
+  padding_left=$PADDING_S
+  padding_right=$PADDING_S
+  icon.font="$ICON_FONT:Semibold:$FONT_SIZE_LARGE.0"
+  label.font="$TEXT_FONT:Semibold:$FONT_SIZE_MEDIUM.0"
   icon.color=0xffffffff #white
   label.color=0xffffffff #white
   background.color=$RIGHT_ITEM_COLOR
-  background.corner_radius=$CORNER_RADIUS
-  background.height=$BACKGROUND_HEIGHT
+  background.corner_radius=$RADIUS_L3
+  background.height=$HEIGHT_L4
   background.drawing=off 
   y_offset=$Y_OFFSET
   icon.padding_left=10
-  icon.padding_right=4
-  label.padding_left=4
+  icon.padding_right=$PADDING_S
+  label.padding_left=$PADDING_S
   label.padding_right=10
 )
 sketchybar --default "${default[@]}"
@@ -69,7 +123,7 @@ source $ITEM_DIR/front_app.sh
                    label.padding_right=8 \
                    label.padding_left=6 \
                    icon.drawing=off \
-                   background.color=$ACTIVE_SPACE_ITEM_COLOR \
+                   background.color=$PILL_COLOR_2 \
                    background.drawing=off \
                    padding_left=0 \
                    padding_right=3 \
@@ -87,7 +141,7 @@ sketchybar -m --add item yabai_mode left \
                 icon.padding_left=5 \
                 icon.padding_right=0 \
                 padding_right=2 \
-                icon.font="$ICON_FONT:Semibold:18.0" \
+                icon.font="$ICON_FONT:Semibold:$FONT_SIZE_XXL.0" \
               --set yabai_mode update_freq=3 \
               --set yabai_mode script="~/.config/sketchybar/plugins/yabai_mode.sh" \
               --set yabai_mode click_script="~/.config/sketchybar/plugins/yabai_mode_click.sh" \
@@ -97,7 +151,7 @@ sketchybar -m --add item yabai_mode left \
 sketchybar --add item yabai.toggle left \
            --set yabai.toggle \
              width=28 \
-             icon.font="SF Symbols:Regular:17.0" \
+             icon.font="SF Symbols:Regular:$FONT_SIZE_XL.0" \
              icon.color=$LEFT_TEXT_COLOR \
              icon.padding_left=0 \
              icon.padding_right=2 \
@@ -110,24 +164,13 @@ sketchybar --add item yabai.toggle left \
              script="$PLUGIN_DIR/yabai_state_display.sh" \
              update_freq=1
 
-#sketchybar -m --add       item               yabai_float left                                                    \
- #             --add       event              window_focus                                                        \
- #             --add       event              float_change                                                        \
- #             --set       yabai_float        script="~/.config/sketchybar/plugins/yabai_float.sh"                \
-  #                                           click_script="~/.config/sketchybar/plugins/yabai_float_click.sh"    \
-  #                                           lazy=off                                                            \
-  #            --subscribe yabai_float        front_app_switched window_focus float_change                        \
-
-
-
-
 # -- RIGHT SIDE ITEMS --
 
 # Sketchybar reload button
 sketchybar --add item reload.bar right \
            --set reload.bar \
              icon=$RELOAD_ICON \
-             icon.font="$ICON_FONT:Semibold:16.0" \
+             icon.font="$ICON_FONT:Semibold:$FONT_SIZE_LARGE.0" \
              icon.color=$RIGHT_TEXT_COLOR \
              icon.padding_left=8 \
              icon.padding_right=4 \
@@ -141,7 +184,7 @@ sketchybar --add item reload.bar right \
 sketchybar --add item color_scheme right \
            --set color_scheme \
                  icon=$SCHEME_ICON \
-                 icon.font="$ICON_FONT:Semibold:16.0" \
+                 icon.font="$ICON_FONT:Semibold:$FONT_SIZE_LARGE.0" \
                  icon.color=$RIGHT_TEXT_COLOR \
                  icon.padding_left=4 \
                  icon.padding_right=8 \
@@ -153,14 +196,13 @@ sketchybar --add item color_scheme right \
                  padding_right=0 \
                  click_script="$HOME/.config/sketchybar/plugins/color_scheme_click.sh"
 
-
 # Clock
 sketchybar --add item clock right \
            --set clock \
            icon.position=right \
            icon.color=$RIGHT_TEXT_COLOR \
            label="Initial" \
-           label.font="$TEXT_FONT:Heavy:16.0" \
+           label.font="$TEXT_FONT:Heavy:$FONT_SIZE_LARGE.0" \
            label.color=$RIGHT_TEXT_COLOR \
            label.padding_right=15 \
            label.padding_left=0 \
@@ -169,7 +211,6 @@ sketchybar --add item clock right \
            update_freq=1 \
            script="$PLUGIN_DIR/clock.sh" 
       
-
 # Calendar
 sketchybar --add item calendar right  \
            --set calendar  \
@@ -184,13 +225,6 @@ sketchybar --add item calendar right  \
              script="$PLUGIN_DIR/calendar.sh"    \ 
              NAME=calendar
 
-# # WiFi widget configuration
-# sketchybar --add item wifi right                   \
-#            --set wifi script="$PLUGIN_DIR/wifi.sh"  \
-#                      update_freq=2                  \
-        
-                    
-
 source $ITEM_DIR/volume.sh
 source $ITEM_DIR/cpu.sh
 source $ITEM_DIR/battery.sh
@@ -204,30 +238,80 @@ else
   sketchybar --set yabai.toggle icon="$YABAI_STOPPED_ICON" icon.color=0xFFE06C75
 fi
 
-
 # Add separate left and right background pills
-# Left pill: spaces, front app, and yabai controls
-sketchybar --add bracket left_bracket '/space\..*/' front_app ableton_timer_toggle yabai_mode yabai.toggle \
-           --set left_bracket background.color=$BAR_COLOR \
-                              background.height=$BACKGROUND_HEIGHT \
-                              background.corner_radius=$CORNER_RADIUS \
+# Left pill: spaces, front app, and yabai controls (PILL LEVEL 1)
+sketchybar --add bracket left_bracket space.1 space_icons.1 space.2 space_icons.2 space.3 space_icons.3 space.4 space_icons.4 space_separator front_app ableton_timer_toggle yabai_mode yabai.toggle \
+           --set left_bracket background.color=$PILL_COLOR_1 \
+                              background.height=$HEIGHT_L2 \
+                              background.corner_radius=$RADIUS_L1 \
+                              border_color=$PILL_LEVEL_2_BORDER \
+                              border_width=$BORDER_THIN \
                               y_offset=$Y_OFFSET
 
-# Right pill: system info and controls (including reload.bar and color_scheme for the concentric pill)
-sketchybar --add bracket right_bracket reload.bar color_scheme clock calendar volume volume_icon cpu battery media \
-           --set right_bracket background.color=$BAR_COLOR \
-                               background.height=$BACKGROUND_HEIGHT \
-                               background.corner_radius=$CORNER_RADIUS \
+# Spaces container pill (PILL LEVEL 2) - contains spaces 1-4 and their icons
+sketchybar --add bracket spaces_bracket space.1 space_icons.1 space.2 space_icons.2 space.3 space_icons.3 space.4 space_icons.4 \
+           --set spaces_bracket background.color=$PILL_COLOR_2 \
+                               background.height=$HEIGHT_L3 \
+                               background.corner_radius=$RADIUS_L2 \
+                               border_color=$PILL_LEVEL_2_BORDER \
+                               border_width=$BORDER_THICK \
+                               padding_left=$PADDING_L \
+                               padding_right=$PADDING_M \
                                y_offset=$Y_OFFSET
 
-# Add smaller control buttons pill on top of right bracket (concentric)
-sketchybar --add bracket control_bracket reload.bar color_scheme \
-           --set control_bracket background.color=$RIGHT_ITEM_COLOR \
-                                background.height=24 \
-                                background.corner_radius=$CORNER_RADIUS \
+# Individual space + icons pills (PILL LEVEL 3) - concentric within spaces container
+sketchybar --add bracket space_1_bracket space.1 space_icons.1 \
+           --set space_1_bracket background.color=$PILL_COLOR_3 \
+                                background.height=$HEIGHT_L4 \
+                                background.corner_radius=$RADIUS_L3 \
                                 y_offset=$Y_OFFSET
 
+sketchybar --add bracket space_2_bracket space.2 space_icons.2 \
+           --set space_2_bracket background.color=$PILL_COLOR_3 \
+                                background.height=$HEIGHT_L4 \
+                                background.corner_radius=$RADIUS_L3 \
+                                y_offset=$Y_OFFSET
 
+sketchybar --add bracket space_3_bracket space.3 space_icons.3 \
+           --set space_3_bracket background.color=$PILL_COLOR_3 \
+                                background.height=$HEIGHT_L4 \
+                                background.corner_radius=$RADIUS_L3 \
+                                y_offset=$Y_OFFSET
+
+sketchybar --add bracket space_4_bracket space.4 space_icons.4 \
+           --set space_4_bracket background.color=$PILL_COLOR_3 \
+                                background.height=$HEIGHT_L4 \
+                                background.corner_radius=$RADIUS_L3 \
+                                y_offset=$Y_OFFSET
+
+# Front app container pill (PILL LEVEL 2) - separate from spaces
+sketchybar --add bracket front_app_bracket front_app \
+           --set front_app_bracket background.color=$PILL_COLOR_2 \
+                                  background.height=$HEIGHT_L3 \
+                                  background.corner_radius=$RADIUS_L2 \
+                                  border_color=$PILL_LEVEL_2_BORDER \
+                                  border_width=$BORDER_THICK \
+                                  padding_left=$PADDING_M \
+                                  padding_right=$PADDING_L \
+                                  y_offset=$Y_OFFSET
+
+# Right pill: system info and controls (PILL LEVEL 1)
+sketchybar --add bracket right_bracket reload.bar color_scheme clock calendar volume volume_icon cpu battery media \
+           --set right_bracket background.color=$PILL_COLOR_1 \
+                               background.height=$HEIGHT_L2 \
+                               background.corner_radius=$RADIUS_L1 \
+                               border_color=$PILL_LEVEL_2_BORDER \
+                               border_width=$BORDER_THIN \
+                               y_offset=$Y_OFFSET
+
+# Add smaller control buttons pill on top of right bracket (PILL LEVEL 2)
+sketchybar --add bracket control_bracket reload.bar color_scheme \
+           --set control_bracket background.color=$PILL_COLOR_2 \
+                                background.height=$HEIGHT_L3 \
+                                background.corner_radius=$RADIUS_L2 \
+                                border_color=$PILL_LEVEL_2_BORDER \
+                                border_width=$BORDER_THICK \
+                                y_offset=$Y_OFFSET
 
 ##### Force all scripts to run the first time (never do this in a script) #####
 sketchybar --update

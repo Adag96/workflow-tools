@@ -4,7 +4,7 @@
 source "$CONFIG_DIR/icons.sh"  # Loads all defined icons
 
 # Import configuration variables
-CORNER_RADIUS=${CORNER_RADIUS:-14}  # Default to 14 if not set
+CORNER_RADIUS=${CORNER_RADIUS:-12}  # Default to 12 if not set
 
 # Define the color schemes
 SCHEMES=(
@@ -45,6 +45,12 @@ get_colors() {
       export RIGHT_TEXT_FEEDBACK_COLOR=0xff313E89
       export MEDIA_COLOR=0xffD996C7
       export ACCENT_COLOR=0xffD959AC
+      
+      # NEW: Nested Pill Color Ramp
+      export PILL_COLOR_1=0xaa3C4CA6  # Main container backgrounds (more transparent)
+      export PILL_COLOR_2=0xffD996C7  # Active space and front app backgrounds
+      export PILL_COLOR_3=0xff9D7191  # Placeholder for future use
+      export PILL_COLOR_4=0xffD959AC  # Placeholder for future use
       ;;
     "DEUS")
       export BAR_COLOR=0xffffffff  
@@ -60,6 +66,12 @@ get_colors() {
       export RIGHT_TEXT_FEEDBACK_COLOR=0xffC5C5C5
       export MEDIA_COLOR=0xfffda1d7    
       export ACCENT_COLOR=0xffF288C2   
+
+      # NEW: Nested Pill Color Ramp
+      export PILL_COLOR_1=0xaaffffff  # Main container backgrounds (more transparent)
+      export PILL_COLOR_2=0xff6A8C61  # Active space and front app backgrounds
+      export PILL_COLOR_3=0xff546F4D  # Placeholder for future use
+      export PILL_COLOR_4=0xffF288C2  # Placeholder for future use
 
       # COLOR PALETTE:
       # 0xffD9D2D5
@@ -81,6 +93,12 @@ get_colors() {
       export RIGHT_TEXT_FEEDBACK_COLOR=0xffA6ABA6
       export MEDIA_COLOR=0xffaa2224
       export ACCENT_COLOR=0xffd89048
+
+      # NEW: Nested Pill Color Ramp
+      export PILL_COLOR_1=0xaadee5de  # Main container backgrounds (more transparent)
+      export PILL_COLOR_2=0xffaa2224  # Active space and front app backgrounds
+      export PILL_COLOR_3=0xff816f65  # Placeholder for future use
+      export PILL_COLOR_4=0xffd89048  # Placeholder for future use
 
       # COLOR PALETTE:
       # 0xff816f65 brown
@@ -110,6 +128,15 @@ get_colors() {
 
       export MEDIA_COLOR=0xfff6c177
       export ACCENT_COLOR=0xffeb6f92
+
+      # NEW: Nested Pill Color Ramp
+      export PILL_COLOR_1=0xaa26303C  # Main container backgrounds (with transparency)
+      export PILL_COLOR_2=0xff393552  # Group containers
+      export PILL_COLOR_3=0xff43415A  # Individual space containers 
+      export PILL_COLOR_4=0xff56526E  # Space icons (innermost)
+      
+      # Border color for Pill Level 2
+      export PILL_LEVEL_2_BORDER=0xff43415A  # 2px outline for level 2
       ;;
   esac
 }
