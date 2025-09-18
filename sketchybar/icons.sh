@@ -29,6 +29,10 @@ export SCHEME_ICON="􀏅"
 export RESUME_TIMER_ICON="􀊖"
 export PAUSE_TIMER_ICON="􀊘"
 
+# Todo list icons
+export TODO_ICON="􀆅"        # checkmark
+export TODO_TIMER_ICON="􀐭"  # timer
+
 # WiFi widget icons
 # WIFI_ICONS=(
 #   wifi.high=􀽗
