@@ -229,6 +229,7 @@ source $ITEM_DIR/volume.sh
 source $ITEM_DIR/cpu.sh
 source $ITEM_DIR/battery.sh
 source $ITEM_DIR/media.sh
+source $ITEM_DIR/todo.sh
 
 # Initialize the Yabai status file to match current state
 if pgrep -q "yabai"; then
@@ -296,7 +297,7 @@ sketchybar --add bracket front_app_bracket front_app \
                                   y_offset=$Y_OFFSET
 
 # Right pill: system info and controls (PILL LEVEL 1)
-sketchybar --add bracket right_bracket reload.bar color_scheme clock calendar volume volume_icon cpu battery media \
+sketchybar --add bracket right_bracket media battery cpu volume volume_icon calendar clock color_scheme reload.bar todo \
            --set right_bracket background.color=$PILL_COLOR_1 \
                                background.height=$HEIGHT_L2 \
                                background.corner_radius=$RADIUS_L1 \
