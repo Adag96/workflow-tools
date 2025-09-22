@@ -8,20 +8,33 @@ source "$CONFIG_DIR/items/scheme.sh"
 get_colors "$(cat "$HOME/.cache/sketchybar/current_scheme" 2>/dev/null || echo "moon")"
 source "$CONFIG_DIR/icons.sh"
 
-# Ensure todo data file exists
+# Ensure todo data file exists with spaces format
 if [ ! -f "$TODO_DATA_FILE" ]; then
     mkdir -p "$(dirname "$TODO_DATA_FILE")"
-    echo '{"todos": [], "next_id": 1}' > "$TODO_DATA_FILE"
+    echo '{"spaces": {"Personal": {"name": "Personal", "color": "🏠", "todos": []}}, "current_space": "ALL", "next_id": 1}' > "$TODO_DATA_FILE"
 fi
 
+# Helper function to get all todos from current space view
+get_current_todos() {
+    local current_space=$(cat "$TODO_DATA_FILE" | jq -r '.current_space' 2>/dev/null || echo "ALL")
+
+    if [ "$current_space" = "ALL" ]; then
+        # Get all todos from all spaces
+        cat "$TODO_DATA_FILE" | jq -r '.spaces | to_entries[] | .value.todos[]' 2>/dev/null
+    else
+        # Get todos from specific space
+        cat "$TODO_DATA_FILE" | jq -r --arg space "$current_space" '.spaces[$space].todos[]' 2>/dev/null
+    fi
+}
+
 update_todo_display() {
-    # Count active (incomplete) todos
-    local active_count=$(cat "$TODO_DATA_FILE" | jq '[.todos[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
-    local total_count=$(cat "$TODO_DATA_FILE" | jq '.todos | length' 2>/dev/null || echo "0")
+    # Count active (incomplete) todos from current view
+    local active_count=$(get_current_todos | jq -s '[.[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
+    local total_count=$(get_current_todos | jq -s 'length' 2>/dev/null || echo "0")
 
     # Check if any todo has an active timer
-    local active_timer_count=$(cat "$TODO_DATA_FILE" | jq '[.todos[] | select(.completed == false and .timer_start != null)] | length' 2>/dev/null || echo "0")
-    local active_timer=$(cat "$TODO_DATA_FILE" | jq -r '.todos[] | select(.completed == false and .timer_start != null) | .id' 2>/dev/null | head -1)
+    local active_timer_count=$(get_current_todos | jq -s '[.[] | select(.completed == false and .timer_start != null)] | length' 2>/dev/null || echo "0")
+    local active_timer=$(get_current_todos | jq -s -r '.[] | select(.completed == false and .timer_start != null) | .id' 2>/dev/null | head -1)
 
     # Set icon and color based on state
     local icon_color="$RIGHT_TEXT_COLOR"

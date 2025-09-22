@@ -3,30 +3,83 @@
 CONFIG_DIR="$HOME/workflow-tools/sketchybar"
 TODO_DATA_FILE="$CONFIG_DIR/todo_data/todos.json"
 
+# Helper function to get all todos from current space view
+get_current_todos() {
+    local current_space=$(cat "$TODO_DATA_FILE" | jq -r '.current_space' 2>/dev/null || echo "ALL")
+
+    if [ "$current_space" = "ALL" ]; then
+        # Get all todos from all spaces
+        cat "$TODO_DATA_FILE" | jq -r '.spaces | to_entries[] | .value.todos[]' 2>/dev/null
+    else
+        # Get todos from specific space
+        cat "$TODO_DATA_FILE" | jq -r --arg space "$current_space" '.spaces[$space].todos[]' 2>/dev/null
+    fi
+}
+
+# Helper function to get current space info
+get_current_space_info() {
+    local current_space=$(cat "$TODO_DATA_FILE" | jq -r '.current_space' 2>/dev/null || echo "ALL")
+
+    if [ "$current_space" = "ALL" ]; then
+        echo "📋 ALL"
+    else
+        local color=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$current_space" '.spaces[$space].color' 2>/dev/null || echo "📋")
+        echo "$color $current_space"
+    fi
+}
+
 # Function to show todos directly with action buttons
 show_main_menu() {
-    local active_count=$(cat "$TODO_DATA_FILE" | jq '[.todos[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
-    local total_count=$(cat "$TODO_DATA_FILE" | jq '.todos | length' 2>/dev/null || echo "0")
+    local active_count=$(get_current_todos | jq -s '[.[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
+    local total_count=$(get_current_todos | jq -s 'length' 2>/dev/null || echo "0")
 
-    # First, show todos if any exist
-    if [ "$total_count" -gt 0 ]; then
-        show_todos_with_actions
-    else
-        # No todos, show add option
-        add_todo
-    fi
+    # Always show the main interface, even if no todos
+    show_todos_with_actions
 }
 
 # Function to show todos with action buttons
 show_todos_with_actions() {
-    local active_count=$(cat "$TODO_DATA_FILE" | jq '[.todos[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
-    local total_count=$(cat "$TODO_DATA_FILE" | jq '.todos | length' 2>/dev/null || echo "0")
+    local active_count=$(get_current_todos | jq -s '[.[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
+    local total_count=$(get_current_todos | jq -s 'length' 2>/dev/null || echo "0")
+
+    # Get current space info for title
+    local space_info=$(get_current_space_info)
 
     # Get todo list with status including active timers - incomplete items first
-    local todo_list=$(cat "$TODO_DATA_FILE" | jq -r '.todos | sort_by(.completed, .id) | .[] | "[\(if .completed then "✓" elif .timer_start != null then "⏱" else " " end)] \(.text)\(if .timer_start != null and .completed == false then " (TIMER ACTIVE)" else "" end)"' 2>/dev/null)
+    local todo_list=""
+    local todos_data="$(get_current_todos | jq -s 'sort_by(.completed, .id) | .[]' -c 2>/dev/null)"
+
+    if [ -n "$todos_data" ]; then
+        while IFS= read -r todo; do
+            if [ -n "$todo" ]; then
+                local completed=$(echo "$todo" | jq -r '.completed')
+                local text=$(echo "$todo" | jq -r '.text')
+                local timer_start=$(echo "$todo" | jq -r '.timer_start')
+
+                local status=" "
+                if [ "$completed" = "true" ]; then
+                    status="✓"
+                elif [ "$timer_start" != "null" ]; then
+                    status="⏱"
+                    text="$text (TIMER ACTIVE)"
+                fi
+
+                if [ -n "$todo_list" ]; then
+                    todo_list="$todo_list\n[$status] $text"
+                else
+                    todo_list="[$status] $text"
+                fi
+            fi
+        done <<< "$todos_data"
+    fi
+
+    # If no todos, show a helpful message
+    if [ -z "$todo_list" ]; then
+        todo_list="No todos in this space yet.\n\nUse 'Actions' > 'Add New Item(s)' to get started!"
+    fi
 
     # Check if there's an active timer to determine button text
-    local active_timer_count=$(cat "$TODO_DATA_FILE" | jq '[.todos[] | select(.completed == false and .timer_start != null)] | length' 2>/dev/null || echo "0")
+    local active_timer_count=$(get_current_todos | jq -s '[.[] | select(.completed == false and .timer_start != null)] | length' 2>/dev/null || echo "0")
     local timer_button_text
     if [ "$active_timer_count" -gt 0 ]; then
         timer_button_text="Stop Item"
@@ -34,13 +87,26 @@ show_todos_with_actions() {
         timer_button_text="Start Item"
     fi
 
-    # Show todos with action buttons
-    local choice=$(osascript -e "display dialog \"${todo_list}\" with title \"Todo List (${active_count} active)\" buttons {\"${timer_button_text}\", \"Actions\", \"OK\"} default button \"OK\"")
+    # AppleScript display dialog is limited to 3 buttons maximum
+    # Add cancel button support for Escape key / Cmd+. to work
+    local choice=$(osascript -e "try
+        display dialog \"${todo_list}\" with title \"${space_info} (${active_count} active)\" buttons {\"Switch Space\", \"${timer_button_text}\", \"Actions\"} default button \"Actions\"
+    on error number -128
+        return \"user_canceled\"
+    end try" 2>/dev/null)
+
+    # Check if user canceled (pressed Escape or Cmd+.)
+    if [ "$choice" = "user_canceled" ] || [ -z "$choice" ]; then
+        return
+    fi
 
     # Extract which button was clicked
     local selected_button=$(echo "$choice" | grep -o 'button returned:[^,}]*' | cut -d: -f2)
 
     case "$selected_button" in
+        "Switch Space")
+            switch_space
+            ;;
         "Start Item")
             start_timer
             ;;
@@ -50,16 +116,16 @@ show_todos_with_actions() {
         "Actions")
             show_action_menu
             ;;
-        "OK"|*)
-            # Just close the dialog
+        *)
+            # Dialog was closed via window controls or timeout
             ;;
     esac
 }
 
 # Function to show action menu
 show_action_menu() {
-    local active_count=$(cat "$TODO_DATA_FILE" | jq '[.todos[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
-    local total_count=$(cat "$TODO_DATA_FILE" | jq '.todos | length' 2>/dev/null || echo "0")
+    local active_count=$(get_current_todos | jq -s '[.[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
+    local total_count=$(get_current_todos | jq -s 'length' 2>/dev/null || echo "0")
 
     # Build action options based on current state
     local actions=("Add New Item(s)")
@@ -71,7 +137,7 @@ show_action_menu() {
         actions+=("Delete Todo")
 
         # Check if there are completed items to clear
-        local completed_count=$(cat "$TODO_DATA_FILE" | jq '[.todos[] | select(.completed == true)] | length' 2>/dev/null || echo "0")
+        local completed_count=$(get_current_todos | jq -s '[.[] | select(.completed == true)] | length' 2>/dev/null || echo "0")
         if [ "$completed_count" -gt 0 ]; then
             actions+=("Clear Completed Items")
         fi
@@ -80,7 +146,7 @@ show_action_menu() {
     fi
 
     # Always show timer-related options
-    actions+=("Show Time Logs" "Clear Timer Logs")
+    actions+=("Show Time Logs" "Clean Up Logs" "Clear Timer Logs")
 
     # Create AppleScript list for choose from list
     local script_options=""
@@ -115,6 +181,9 @@ show_action_menu() {
             "Show Time Logs")
                 show_time_logs
                 ;;
+            "Clean Up Logs")
+                clean_up_logs
+                ;;
             "Clear Timer Logs")
                 clear_timer_logs
                 ;;
@@ -132,7 +201,15 @@ view_todos() {
 }
 
 add_todo() {
-    local dialog_result=$(osascript -e 'display dialog "Enter new todo item(s):\n\nSeparate multiple items with commas\nExample: Go through inbox, Test styles" default answer "" buttons {"Cancel", "Add"} default button "Add"' 2>/dev/null)
+    local current_space=$(cat "$TODO_DATA_FILE" | jq -r '.current_space' 2>/dev/null || echo "ALL")
+    local target_space="Personal"
+
+    # If we're in a specific space, use that space. If "ALL", default to Personal
+    if [ "$current_space" != "ALL" ]; then
+        target_space="$current_space"
+    fi
+
+    local dialog_result=$(osascript -e "display dialog \"Enter new todo item(s) for $target_space:\n\nSeparate multiple items with commas\nExample: Go through inbox, Test styles\" default answer \"\" buttons {\"Cancel\", \"Add\"} default button \"Add\"" 2>/dev/null)
     local new_todos=$(echo "$dialog_result" | sed -n 's/.*text returned:\(.*\)/\1/p')
 
     if [ -n "$new_todos" ]; then
@@ -148,9 +225,9 @@ add_todo() {
 
             # Skip empty items
             if [ -n "$todo_item" ]; then
-                # Add this todo to JSON
-                cat "$TODO_DATA_FILE" | jq --arg text "$todo_item" --arg time "$current_time" --arg id "$next_id" \
-                    '.todos += [{"id": ($id | tonumber), "text": $text, "completed": false, "created": $time, "timer_start": null, "timer_duration": 0}] | .next_id += 1' \
+                # Add this todo to the target space
+                cat "$TODO_DATA_FILE" | jq --arg space "$target_space" --arg text "$todo_item" --arg time "$current_time" --arg id "$next_id" \
+                    '.spaces[$space].todos += [{"id": ($id | tonumber), "text": $text, "completed": false, "created": $time, "timer_start": null, "timer_duration": 0}] | .next_id += 1' \
                     > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
 
                 next_id=$((next_id + 1))
@@ -162,23 +239,23 @@ add_todo() {
 
         # Show confirmation with count
         if [ "$items_added" -eq 1 ]; then
-            osascript -e "display dialog \"✅ Added 1 todo item\" with title \"Item Added\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+            osascript -e "display dialog \"✅ Added 1 todo item to $target_space\" with title \"Item Added\" buttons {\"OK\"} default button \"OK\" giving up after 2"
         else
-            osascript -e "display dialog \"✅ Added $items_added todo items\" with title \"Items Added\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+            osascript -e "display dialog \"✅ Added $items_added todo items to $target_space\" with title \"Items Added\" buttons {\"OK\"} default button \"OK\" giving up after 2"
         fi
     fi
 }
 
 complete_todo() {
     # Use different approach to handle todos with spaces
-    local todo_count=$(cat "$TODO_DATA_FILE" | jq '[.todos[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
+    local todo_count=$(get_current_todos | jq -s '[.[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
     if [ "$todo_count" -eq 0 ]; then
         osascript -e 'display dialog "No active todos to complete!" with title "Info" buttons {"OK"} default button "OK"'
         return
     fi
 
     # Get todos using newline delimiter instead of spaces
-    local todos_text=$(cat "$TODO_DATA_FILE" | jq -r '.todos[] | select(.completed == false) | .text' 2>/dev/null)
+    local todos_text=$(get_current_todos | jq -s -r '.[] | select(.completed == false) | .text' 2>/dev/null)
 
     # Convert newline-separated text to AppleScript list
     local script_options=""
@@ -195,32 +272,51 @@ complete_todo() {
     local selected=$(osascript -e "choose from list {${script_options}} with title \"Mark Todo as Complete\" with prompt \"Select todo to mark as completed:\"")
 
     if [ "$selected" != "false" ]; then
-        # Find the todo ID by text
-        local todo_id=$(cat "$TODO_DATA_FILE" | jq -r --arg text "$selected" '.todos[] | select(.text == $text and .completed == false) | .id' 2>/dev/null)
+        # Find the todo ID by text across spaces
+        local current_space=$(cat "$TODO_DATA_FILE" | jq -r '.current_space' 2>/dev/null || echo "ALL")
 
-        if [ -n "$todo_id" ] && [ "$todo_id" != "null" ]; then
-            # Mark todo as completed
-            cat "$TODO_DATA_FILE" | jq --argjson id "$todo_id" \
-                '(.todos[] | select(.id == $id)).completed = true' \
-                > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
-
-            sketchybar --trigger todo_update
-
-            # Show confirmation
-            osascript -e "display dialog \"✓ Completed: ${selected}\" with title \"Todo Completed\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+        if [ "$current_space" = "ALL" ]; then
+            # For ALL view, find which space contains this todo and complete it there
+            local space_list=$(cat "$TODO_DATA_FILE" | jq -r '.spaces | keys[]' 2>/dev/null)
+            while IFS= read -r space; do
+                if [ -n "$space" ]; then
+                    local todo_id=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$space" --arg text "$selected" '.spaces[$space].todos[] | select(.text == $text and .completed == false) | .id' 2>/dev/null)
+                    if [ -n "$todo_id" ] && [ "$todo_id" != "null" ]; then
+                        # Mark todo as completed
+                        cat "$TODO_DATA_FILE" | jq --arg space "$space" --argjson id "$todo_id" \
+                            '(.spaces[$space].todos[] | select(.id == $id)).completed = true' \
+                            > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+                        break
+                    fi
+                fi
+            done <<< "$space_list"
+        else
+            # For specific space view, complete in current space
+            local todo_id=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$current_space" --arg text "$selected" '.spaces[$space].todos[] | select(.text == $text and .completed == false) | .id' 2>/dev/null)
+            if [ -n "$todo_id" ] && [ "$todo_id" != "null" ]; then
+                # Mark todo as completed
+                cat "$TODO_DATA_FILE" | jq --arg space "$current_space" --argjson id "$todo_id" \
+                    '(.spaces[$space].todos[] | select(.id == $id)).completed = true' \
+                    > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+            fi
         fi
+
+        sketchybar --trigger todo_update
+
+        # Show confirmation
+        osascript -e "display dialog \"✓ Completed: ${selected}\" with title \"Todo Completed\" buttons {\"OK\"} default button \"OK\" giving up after 2"
     fi
 }
 
 delete_todo() {
-    local todo_count=$(cat "$TODO_DATA_FILE" | jq '.todos | length' 2>/dev/null || echo "0")
+    local todo_count=$(get_current_todos | jq -s 'length' 2>/dev/null || echo "0")
     if [ "$todo_count" -eq 0 ]; then
         osascript -e 'display dialog "No todos" with title "Info" buttons {"OK"} default button "OK"'
         return
     fi
 
-    # Get todos using newline delimiter
-    local todos_text=$(cat "$TODO_DATA_FILE" | jq -r '.todos[] | .text' 2>/dev/null)
+    # Get todos using newline delimiter from current space
+    local todos_text=$(get_current_todos | jq -s -r '.[] | .text' 2>/dev/null)
 
     # Convert newline-separated text to AppleScript list
     local script_options=""
@@ -237,35 +333,55 @@ delete_todo() {
     local selected=$(osascript -e "choose from list {${script_options}} with title \"Delete Todo\" with prompt \"Select todo to delete:\"")
 
     if [ "$selected" != "false" ]; then
-        local todo_id=$(cat "$TODO_DATA_FILE" | jq -r --arg text "$selected" '.todos[] | select(.text == $text) | .id' 2>/dev/null)
+        # Find the todo ID by text across all spaces (since we need to delete from the actual space)
+        local current_space=$(cat "$TODO_DATA_FILE" | jq -r '.current_space' 2>/dev/null || echo "ALL")
 
-        if [ -n "$todo_id" ] && [ "$todo_id" != "null" ]; then
-            # Remove todo from JSON
-            cat "$TODO_DATA_FILE" | jq --argjson id "$todo_id" \
-                '.todos = [.todos[] | select(.id != $id)]' \
-                > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
-
-            sketchybar --trigger todo_update
+        if [ "$current_space" = "ALL" ]; then
+            # For ALL view, find which space contains this todo and delete from there
+            local space_list=$(cat "$TODO_DATA_FILE" | jq -r '.spaces | keys[]' 2>/dev/null)
+            while IFS= read -r space; do
+                if [ -n "$space" ]; then
+                    local todo_id=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$space" --arg text "$selected" '.spaces[$space].todos[] | select(.text == $text) | .id' 2>/dev/null)
+                    if [ -n "$todo_id" ] && [ "$todo_id" != "null" ]; then
+                        # Remove todo from this space
+                        cat "$TODO_DATA_FILE" | jq --arg space "$space" --argjson id "$todo_id" \
+                            '.spaces[$space].todos = [.spaces[$space].todos[] | select(.id != $id)]' \
+                            > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+                        break
+                    fi
+                fi
+            done <<< "$space_list"
+        else
+            # For specific space view, delete from current space
+            local todo_id=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$current_space" --arg text "$selected" '.spaces[$space].todos[] | select(.text == $text) | .id' 2>/dev/null)
+            if [ -n "$todo_id" ] && [ "$todo_id" != "null" ]; then
+                # Remove todo from current space
+                cat "$TODO_DATA_FILE" | jq --arg space "$current_space" --argjson id "$todo_id" \
+                    '.spaces[$space].todos = [.spaces[$space].todos[] | select(.id != $id)]' \
+                    > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+            fi
         fi
+
+        sketchybar --trigger todo_update
     fi
 }
 
 start_timer() {
-    local todo_count=$(cat "$TODO_DATA_FILE" | jq '[.todos[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
+    local todo_count=$(get_current_todos | jq -s '[.[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
     if [ "$todo_count" -eq 0 ]; then
         osascript -e 'display dialog "No active todos" with title "Info" buttons {"OK"} default button "OK"'
         return
     fi
 
-    # Check if there's already an active timer
-    local active_timer=$(cat "$TODO_DATA_FILE" | jq -r '.todos[] | select(.completed == false and .timer_start != null) | .text' 2>/dev/null)
+    # Check if there's already an active timer across all spaces
+    local active_timer=$(get_current_todos | jq -s -r '.[] | select(.completed == false and .timer_start != null) | .text' 2>/dev/null | head -1)
     if [ -n "$active_timer" ]; then
         osascript -e "display dialog \"Timer already running for: ${active_timer}\n\nStop the current timer before starting a new one.\" with title \"Timer Already Active\" buttons {\"OK\"} default button \"OK\""
         return
     fi
 
-    # Get todos using newline delimiter
-    local todos_text=$(cat "$TODO_DATA_FILE" | jq -r '.todos[] | select(.completed == false) | .text' 2>/dev/null)
+    # Get todos using newline delimiter from current view
+    local todos_text=$(get_current_todos | jq -s -r '.[] | select(.completed == false) | .text' 2>/dev/null)
 
     # Convert newline-separated text to AppleScript list
     local script_options=""
@@ -282,30 +398,68 @@ start_timer() {
     local selected=$(osascript -e "choose from list {${script_options}} with title \"Start Timer\" with prompt \"Select todo to start timer:\"")
 
     if [ "$selected" != "false" ]; then
-        local todo_id=$(cat "$TODO_DATA_FILE" | jq -r --arg text "$selected" '.todos[] | select(.text == $text and .completed == false) | .id' 2>/dev/null)
+        # Find which space contains this todo and start timer there
+        local current_space=$(cat "$TODO_DATA_FILE" | jq -r '.current_space' 2>/dev/null || echo "ALL")
+        local todo_id=""
+        local target_space=""
 
-        # Store timestamp as Unix epoch seconds (much simpler and more reliable)
-        local current_time=$(date +%s)
+        if [ "$current_space" = "ALL" ]; then
+            # For ALL view, find which space contains this todo
+            local space_list=$(cat "$TODO_DATA_FILE" | jq -r '.spaces | keys[]' 2>/dev/null)
+            while IFS= read -r space; do
+                if [ -n "$space" ]; then
+                    todo_id=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$space" --arg text "$selected" '.spaces[$space].todos[] | select(.text == $text and .completed == false) | .id' 2>/dev/null)
+                    if [ -n "$todo_id" ] && [ "$todo_id" != "null" ]; then
+                        target_space="$space"
+                        break
+                    fi
+                fi
+            done <<< "$space_list"
+        else
+            # For specific space view, find todo in current space
+            todo_id=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$current_space" --arg text "$selected" '.spaces[$space].todos[] | select(.text == $text and .completed == false) | .id' 2>/dev/null)
+            target_space="$current_space"
+        fi
 
-        # Set timer start time
-        cat "$TODO_DATA_FILE" | jq --argjson id "$todo_id" --argjson time "$current_time" \
-            '(.todos[] | select(.id == $id)).timer_start = $time' \
-            > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+        if [ -n "$todo_id" ] && [ "$todo_id" != "null" ] && [ -n "$target_space" ]; then
+            # Store timestamp as Unix epoch seconds (much simpler and more reliable)
+            local current_time=$(date +%s)
 
-        # Force immediate update with multiple triggers to ensure it works
-        sketchybar --trigger todo_update
-        sleep 0.1
-        sketchybar --trigger todo_update
+            # Set timer start time in the correct space
+            cat "$TODO_DATA_FILE" | jq --arg space "$target_space" --argjson id "$todo_id" --argjson time "$current_time" \
+                '(.spaces[$space].todos[] | select(.id == $id)).timer_start = $time' \
+                > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
 
-        # Show confirmation
-        osascript -e "display dialog \"⏱ Timer started for: ${selected}\" with title \"Timer Started\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+            # Force immediate update with multiple triggers to ensure it works
+            sketchybar --trigger todo_update
+            sleep 0.1
+            sketchybar --trigger todo_update
+
+            # Show confirmation
+            osascript -e "display dialog \"⏱ Timer started for: ${selected}\" with title \"Timer Started\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+        fi
     fi
 }
 
 stop_timer() {
-    # Find the active timer automatically (since we only allow one)
-    local active_timer_text=$(cat "$TODO_DATA_FILE" | jq -r '.todos[] | select(.completed == false and .timer_start != null) | .text' 2>/dev/null)
-    local active_timer_id=$(cat "$TODO_DATA_FILE" | jq -r '.todos[] | select(.completed == false and .timer_start != null) | .id' 2>/dev/null)
+    # Find the active timer automatically across all spaces (since we only allow one)
+    local active_timer_text=""
+    local active_timer_id=""
+    local active_timer_space=""
+
+    # Search all spaces for active timer
+    local space_list=$(cat "$TODO_DATA_FILE" | jq -r '.spaces | keys[]' 2>/dev/null)
+    while IFS= read -r space; do
+        if [ -n "$space" ]; then
+            local timer_text=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$space" '.spaces[$space].todos[] | select(.completed == false and .timer_start != null) | .text' 2>/dev/null)
+            if [ -n "$timer_text" ] && [ "$timer_text" != "null" ]; then
+                active_timer_text="$timer_text"
+                active_timer_id=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$space" '.spaces[$space].todos[] | select(.completed == false and .timer_start != null) | .id' 2>/dev/null)
+                active_timer_space="$space"
+                break
+            fi
+        fi
+    done <<< "$space_list"
 
     if [ -z "$active_timer_text" ] || [ "$active_timer_text" = "null" ]; then
         osascript -e 'display dialog "No active timer to stop!" with title "Info" buttons {"OK"} default button "OK"'
@@ -315,7 +469,7 @@ stop_timer() {
     local current_time=$(date +%s)
 
     # Calculate duration and stop timer
-    local start_time=$(cat "$TODO_DATA_FILE" | jq -r --argjson id "$active_timer_id" '.todos[] | select(.id == $id) | .timer_start' 2>/dev/null)
+    local start_time=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$active_timer_space" --argjson id "$active_timer_id" '.spaces[$space].todos[] | select(.id == $id) | .timer_start' 2>/dev/null)
     if [ "$start_time" != "null" ] && [ -n "$start_time" ]; then
         echo "Debug: start_time=$start_time, current_time=$current_time" >> /tmp/timer_debug.log
 
@@ -353,12 +507,12 @@ stop_timer() {
         fi
 
         # Get previous total time and add this session
-        local previous_duration=$(cat "$TODO_DATA_FILE" | jq -r --argjson id "$active_timer_id" '.todos[] | select(.id == $id) | .timer_duration' 2>/dev/null || echo "0")
+        local previous_duration=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$active_timer_space" --argjson id "$active_timer_id" '.spaces[$space].todos[] | select(.id == $id) | .timer_duration' 2>/dev/null || echo "0")
         local total_duration=$((previous_duration + duration))
 
-        # Update the todo with total time and clear timer_start
-        cat "$TODO_DATA_FILE" | jq --argjson id "$active_timer_id" --argjson total "$total_duration" \
-            '(.todos[] | select(.id == $id)) |= (.timer_duration = $total | .timer_start = null)' \
+        # Update the todo with total time and clear timer_start in the correct space
+        cat "$TODO_DATA_FILE" | jq --arg space "$active_timer_space" --argjson id "$active_timer_id" --argjson total "$total_duration" \
+            '(.spaces[$space].todos[] | select(.id == $id)) |= (.timer_duration = $total | .timer_start = null)' \
             > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
 
         # Log to timer log file
@@ -393,6 +547,9 @@ stop_timer() {
         echo "Debug: total_duration=$total_duration, calculated_hours=$total_hours" >> /tmp/timer_debug.log
 
         local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+
+        # Simple logging approach - just append for now and add clustering later if needed
+        # The clustering was causing issues with macOS bash 3.2 compatibility
 
         # Check if this is a new todo item (different from the last logged item)
         local last_logged_item=""
@@ -477,6 +634,66 @@ show_time_logs() {
     open "$log_file"
 }
 
+clean_up_logs() {
+    local log_file="$CONFIG_DIR/todo_data/timer_log.txt"
+
+    # Check if timer log exists and has content
+    if [ ! -f "$log_file" ] || [ ! -s "$log_file" ]; then
+        osascript -e 'display dialog "No timer logs to clean up!" with title "Info" buttons {"OK"} default button "OK"'
+        return
+    fi
+
+    # Count existing log entries
+    local log_count=$(grep -c "^\[" "$log_file" 2>/dev/null || echo "0")
+
+    if [ "$log_count" -eq 0 ]; then
+        osascript -e 'display dialog "No timer entries to cluster!" with title "Info" buttons {"OK"} default button "OK"'
+        return
+    fi
+
+    # Show confirmation with explanation
+    local confirm=$(osascript -e "display dialog \"Clean up timer logs by grouping entries by todo item?\n\nThis will reorganize ${log_count} log entries to cluster all time entries for each todo together for easier review.\" with title \"Clean Up Logs\" buttons {\"Cancel\", \"Clean Up\"} default button \"Clean Up\"")
+
+    local confirmed=$(echo "$confirm" | grep -o 'button returned:[^,}]*' | cut -d: -f2)
+
+    if [ "$confirmed" = "Clean Up" ]; then
+        # Create temp files
+        local temp_log="${log_file}.clustered"
+        local temp_entries="${log_file}.entries"
+
+        # Extract header
+        head -2 "$log_file" > "$temp_log"
+
+        # Extract all log entries (lines starting with [)
+        grep '^\[' "$log_file" > "$temp_entries" 2>/dev/null || true
+
+        if [ -s "$temp_entries" ]; then
+            # Get unique todo names in order of first appearance
+            local todo_names=$(awk -F'"' '{if(NF>=3) print $2}' "$temp_entries" | awk '!seen[$0]++')
+
+            # Write entries grouped by todo name
+            echo "$todo_names" | while IFS= read -r todo_name; do
+                if [ -n "$todo_name" ]; then
+                    # Find all entries for this todo and write them
+                    grep "\"$todo_name\"" "$temp_entries" >> "$temp_log"
+                    echo "" >> "$temp_log"
+                fi
+            done
+
+            # Replace original file with clustered version
+            mv "$temp_log" "$log_file"
+            rm -f "$temp_entries"
+
+            # Show success message
+            osascript -e "display dialog \"✅ Timer logs cleaned up!\n\nEntries are now grouped by todo item for easier review.\" with title \"Logs Cleaned Up\" buttons {\"OK\"} default button \"OK\" giving up after 3"
+        else
+            # Clean up temp files if something went wrong
+            rm -f "$temp_log" "$temp_entries"
+            osascript -e 'display dialog "No timer entries found to cluster!" with title "Info" buttons {"OK"} default button "OK"'
+        fi
+    fi
+}
+
 clear_timer_logs() {
     local log_file="$CONFIG_DIR/todo_data/timer_log.txt"
 
@@ -503,8 +720,8 @@ clear_timer_logs() {
         echo "# Timer Log - Started $start_date" >> "$log_file"
         echo "" >> "$log_file"
 
-        # Reset all timer durations to 0 in the JSON file
-        cat "$TODO_DATA_FILE" | jq '.todos[].timer_duration = 0' \
+        # Reset all timer durations to 0 across all spaces in the JSON file
+        cat "$TODO_DATA_FILE" | jq '.spaces[].todos[].timer_duration = 0' \
             > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
 
         # Update the display to reflect reset totals
@@ -512,6 +729,62 @@ clear_timer_logs() {
 
         # Show confirmation
         osascript -e "display dialog \"🗑 Timer logs cleared!\n\nStarted fresh log session for today.\nAll timer totals have been reset to 0.\" with title \"Logs Cleared\" buttons {\"OK\"} default button \"OK\" giving up after 4"
+    fi
+}
+
+# Function to switch between spaces
+switch_space() {
+    local current_space=$(cat "$TODO_DATA_FILE" | jq -r '.current_space' 2>/dev/null || echo "ALL")
+
+    # Define the custom order you want
+    local ordered_spaces=("ALL" "Ujam" "Lonebody" "60 Pleasant" "Personal" "Workflow Tools")
+    local space_options=()
+
+    # Add each space in your preferred order
+    for space in "${ordered_spaces[@]}"; do
+        if [ "$space" = "ALL" ]; then
+            local all_count=$(cat "$TODO_DATA_FILE" | jq '[.spaces[].todos[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
+            space_options+=("📋 ALL ($all_count)")
+        else
+            # Check if this space exists in the JSON
+            local exists=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$space" '.spaces[$space] // empty' 2>/dev/null)
+            if [ -n "$exists" ]; then
+                local color=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$space" '.spaces[$space].color' 2>/dev/null || echo "📋")
+                local count=$(cat "$TODO_DATA_FILE" | jq --arg space "$space" '[.spaces[$space].todos[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
+                space_options+=("$color $space ($count)")
+            fi
+        fi
+    done
+
+    # Create AppleScript list
+    local script_options=""
+    for option in "${space_options[@]}"; do
+        if [ -n "$script_options" ]; then
+            script_options="${script_options}, \"${option}\""
+        else
+            script_options="\"${option}\""
+        fi
+    done
+
+    local choice=$(osascript -e "choose from list {${script_options}} with title \"Switch to Space\" with prompt \"Current: $current_space\"")
+
+    if [ "$choice" != "false" ]; then
+        local selected_space
+        if [ "$choice" = "ALL" ]; then
+            selected_space="ALL"
+        else
+            # Extract space name from "emoji SPACE (count)" format
+            selected_space=$(echo "$choice" | sed -E 's/^[^[:space:]]+ ([^(]+) \([0-9]+\)$/\1/' | sed 's/[[:space:]]*$//')
+        fi
+
+        # Update current space
+        cat "$TODO_DATA_FILE" | jq --arg space "$selected_space" '.current_space = $space' \
+            > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+
+        sketchybar --trigger todo_update
+
+        # Show the new space
+        show_main_menu
     fi
 }
 
