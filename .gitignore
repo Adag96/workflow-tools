@@ -2,5 +2,5 @@
 *.log
 
 sketchybar/timer_data/
-sketchybar/todo_data/todos.json
-sketchybar/todo_data/timer_log.txt
+sketchybar/todo_data/
+
