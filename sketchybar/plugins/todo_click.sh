@@ -68,11 +68,19 @@ show_action_menu() {
     fi
 
     if [ "$total_count" -gt 0 ]; then
-        actions+=("Delete Todo" "Clear All")
+        actions+=("Delete Todo")
+
+        # Check if there are completed items to clear
+        local completed_count=$(cat "$TODO_DATA_FILE" | jq '[.todos[] | select(.completed == true)] | length' 2>/dev/null || echo "0")
+        if [ "$completed_count" -gt 0 ]; then
+            actions+=("Clear Completed Items")
+        fi
+
+        actions+=("Clear All")
     fi
 
-    # Always show clear timer logs option
-    actions+=("Clear Timer Logs")
+    # Always show timer-related options
+    actions+=("Show Time Logs" "Clear Timer Logs")
 
     # Create AppleScript list for choose from list
     local script_options=""
@@ -98,8 +106,14 @@ show_action_menu() {
             "Delete Todo")
                 delete_todo
                 ;;
+            "Clear Completed Items")
+                clear_completed_todos
+                ;;
             "Clear All")
                 clear_all_todos
+                ;;
+            "Show Time Logs")
+                show_time_logs
                 ;;
             "Clear Timer Logs")
                 clear_timer_logs
@@ -400,6 +414,34 @@ stop_timer() {
     sketchybar --trigger todo_update
 }
 
+clear_completed_todos() {
+    local completed_count=$(cat "$TODO_DATA_FILE" | jq '[.todos[] | select(.completed == true)] | length' 2>/dev/null || echo "0")
+    if [ "$completed_count" -eq 0 ]; then
+        osascript -e 'display dialog "No completed todos to clear!" with title "Info" buttons {"OK"} default button "OK"'
+        return
+    fi
+
+    # Confirmation dialog
+    local confirm=$(osascript -e "display dialog \"Are you sure you want to delete ${completed_count} completed todo(s)?\n\nThis action cannot be undone.\" with title \"Clear Completed Items\" buttons {\"Cancel\", \"Delete Completed\"} default button \"Delete Completed\"")
+
+    local confirmed=$(echo "$confirm" | grep -o 'button returned:[^,}]*' | cut -d: -f2)
+
+    if [ "$confirmed" = "Delete Completed" ]; then
+        # Remove only completed todos, keep incomplete ones
+        cat "$TODO_DATA_FILE" | jq '.todos = [.todos[] | select(.completed == false)]' \
+            > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+
+        sketchybar --trigger todo_update
+
+        # Show confirmation
+        if [ "$completed_count" -eq 1 ]; then
+            osascript -e "display dialog \"🗑 Cleared 1 completed todo!\" with title \"Completed Items Cleared\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+        else
+            osascript -e "display dialog \"🗑 Cleared ${completed_count} completed todos!\" with title \"Completed Items Cleared\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+        fi
+    fi
+}
+
 clear_all_todos() {
     local total_count=$(cat "$TODO_DATA_FILE" | jq '.todos | length' 2>/dev/null || echo "0")
     if [ "$total_count" -eq 0 ]; then
@@ -420,6 +462,19 @@ clear_all_todos() {
         # Show confirmation
         osascript -e "display dialog \"🗑 All todos cleared!\" with title \"Todos Cleared\" buttons {\"OK\"} default button \"OK\" giving up after 2"
     fi
+}
+
+show_time_logs() {
+    local log_file="$CONFIG_DIR/todo_data/timer_log.txt"
+
+    # Check if timer log exists and has content
+    if [ ! -f "$log_file" ] || [ ! -s "$log_file" ]; then
+        osascript -e 'display dialog "No timer logs found!" with title "Info" buttons {"OK"} default button "OK"'
+        return
+    fi
+
+    # Open the log file directly in the default text editor
+    open "$log_file"
 }
 
 clear_timer_logs() {
