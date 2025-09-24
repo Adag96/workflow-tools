@@ -9,7 +9,8 @@ get_colors "$(cat "$HOME/.cache/sketchybar/current_scheme" 2>/dev/null || echo "
 source "$CONFIG_DIR/icons.sh"
 
 # Ensure todo data file exists with spaces format
-if [ ! -f "$TODO_DATA_FILE" ]; then
+# Check if the file exists, or if the parent is a symlink (don't break symlinks)
+if [ ! -f "$TODO_DATA_FILE" ] && [ ! -L "$(dirname "$TODO_DATA_FILE")" ]; then
     mkdir -p "$(dirname "$TODO_DATA_FILE")"
     echo '{"spaces": {"Personal": {"name": "Personal", "color": "🏠", "todos": []}}, "current_space": "ALL", "next_id": 1}' > "$TODO_DATA_FILE"
 fi
