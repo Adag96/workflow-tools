@@ -209,13 +209,24 @@ add_todo() {
         target_space="$current_space"
     fi
 
+    # Verify target space exists, if not default to Personal
+    local space_exists=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$target_space" '.spaces[$space] // empty' 2>/dev/null)
+    if [ -z "$space_exists" ]; then
+        target_space="Personal"
+    fi
+
     local dialog_result=$(osascript -e "display dialog \"Enter new todo item(s) for $target_space:\n\nSeparate multiple items with commas\nExample: Go through inbox, Test styles\" default answer \"\" buttons {\"Cancel\", \"Add\"} default button \"Add\"" 2>/dev/null)
     local new_todos=$(echo "$dialog_result" | sed -n 's/.*text returned:\(.*\)/\1/p')
 
     if [ -n "$new_todos" ]; then
-        local next_id=$(cat "$TODO_DATA_FILE" | jq '.next_id' 2>/dev/null || echo "1")
+        # Read initial state once
+        local initial_data=$(cat "$TODO_DATA_FILE")
+        local next_id=$(echo "$initial_data" | jq '.next_id' 2>/dev/null || echo "1")
         local current_time=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
         local items_added=0
+
+        # Build array of new todos to add all at once
+        local new_todos_json="[]"
 
         # Split by comma and process each item
         IFS=',' read -ra TODO_ARRAY <<< "$new_todos"
@@ -225,23 +236,28 @@ add_todo() {
 
             # Skip empty items
             if [ -n "$todo_item" ]; then
-                # Add this todo to the target space
-                cat "$TODO_DATA_FILE" | jq --arg space "$target_space" --arg text "$todo_item" --arg time "$current_time" --arg id "$next_id" \
-                    '.spaces[$space].todos += [{"id": ($id | tonumber), "text": $text, "completed": false, "created": $time, "timer_start": null, "timer_duration": 0}] | .next_id += 1' \
-                    > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
-
+                # Add to our array of new todos
+                new_todos_json=$(echo "$new_todos_json" | jq --arg text "$todo_item" --arg time "$current_time" --argjson id "$next_id" \
+                    '. += [{"id": $id, "text": $text, "completed": false, "created": $time, "timer_start": null, "timer_duration": 0}]')
                 next_id=$((next_id + 1))
                 items_added=$((items_added + 1))
             fi
         done
 
-        sketchybar --trigger todo_update
+        # Add all items at once to prevent race conditions
+        if [ "$items_added" -gt 0 ]; then
+            echo "$initial_data" | jq --arg space "$target_space" --argjson new_todos "$new_todos_json" --argjson next_id "$next_id" \
+                '.spaces[$space].todos += $new_todos | .next_id = $next_id' \
+                > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
 
-        # Show confirmation with count
-        if [ "$items_added" -eq 1 ]; then
-            osascript -e "display dialog \"✅ Added 1 todo item to $target_space\" with title \"Item Added\" buttons {\"OK\"} default button \"OK\" giving up after 2"
-        else
-            osascript -e "display dialog \"✅ Added $items_added todo items to $target_space\" with title \"Items Added\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+            sketchybar --trigger todo_update
+
+            # Show confirmation with count
+            if [ "$items_added" -eq 1 ]; then
+                osascript -e "display dialog \"✅ Added 1 todo item to $target_space\" with title \"Item Added\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+            else
+                osascript -e "display dialog \"✅ Added $items_added todo items to $target_space\" with title \"Items Added\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+            fi
         fi
     fi
 }
@@ -572,11 +588,14 @@ stop_timer() {
 }
 
 clear_completed_todos() {
-    local completed_count=$(cat "$TODO_DATA_FILE" | jq '[.todos[] | select(.completed == true)] | length' 2>/dev/null || echo "0")
+    # Use the same logic as detection - count completed items in current space view
+    local completed_count=$(get_current_todos | jq -s '[.[] | select(.completed == true)] | length' 2>/dev/null || echo "0")
     if [ "$completed_count" -eq 0 ]; then
         osascript -e 'display dialog "No completed todos to clear!" with title "Info" buttons {"OK"} default button "OK"'
         return
     fi
+
+    local current_space=$(cat "$TODO_DATA_FILE" | jq -r '.current_space' 2>/dev/null || echo "ALL")
 
     # Confirmation dialog
     local confirm=$(osascript -e "display dialog \"Are you sure you want to delete ${completed_count} completed todo(s)?\n\nThis action cannot be undone.\" with title \"Clear Completed Items\" buttons {\"Cancel\", \"Delete Completed\"} default button \"Delete Completed\"")
@@ -584,9 +603,16 @@ clear_completed_todos() {
     local confirmed=$(echo "$confirm" | grep -o 'button returned:[^,}]*' | cut -d: -f2)
 
     if [ "$confirmed" = "Delete Completed" ]; then
-        # Remove only completed todos, keep incomplete ones
-        cat "$TODO_DATA_FILE" | jq '.todos = [.todos[] | select(.completed == false)]' \
-            > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+        if [ "$current_space" = "ALL" ]; then
+            # Remove completed todos from all spaces
+            cat "$TODO_DATA_FILE" | jq '.spaces = (.spaces | with_entries(.value.todos = [.value.todos[] | select(.completed == false)]))' \
+                > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+        else
+            # Remove completed todos from specific space only
+            cat "$TODO_DATA_FILE" | jq --arg space "$current_space" \
+                '.spaces[$space].todos = [.spaces[$space].todos[] | select(.completed == false)]' \
+                > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+        fi
 
         sketchybar --trigger todo_update
 
@@ -600,11 +626,14 @@ clear_completed_todos() {
 }
 
 clear_all_todos() {
-    local total_count=$(cat "$TODO_DATA_FILE" | jq '.todos | length' 2>/dev/null || echo "0")
+    # Count todos in current space view using same logic as other functions
+    local total_count=$(get_current_todos | jq -s 'length' 2>/dev/null || echo "0")
     if [ "$total_count" -eq 0 ]; then
         osascript -e 'display dialog "No todos to clear!" with title "Info" buttons {"OK"} default button "OK"'
         return
     fi
+
+    local current_space=$(cat "$TODO_DATA_FILE" | jq -r '.current_space' 2>/dev/null || echo "ALL")
 
     # Confirmation dialog
     local confirm=$(osascript -e "display dialog \"Are you sure you want to delete ALL ${total_count} todos?\n\nThis action cannot be undone.\" with title \"Clear All Todos\" buttons {\"Cancel\", \"Delete All\"} default button \"Cancel\"")
@@ -612,8 +641,17 @@ clear_all_todos() {
     local confirmed=$(echo "$confirm" | grep -o 'button returned:[^,}]*' | cut -d: -f2)
 
     if [ "$confirmed" = "Delete All" ]; then
-        # Clear all todos
-        echo '{"todos": [], "next_id": 1}' > "$TODO_DATA_FILE"
+        if [ "$current_space" = "ALL" ]; then
+            # Clear todos from all spaces but preserve space structure
+            cat "$TODO_DATA_FILE" | jq '.spaces = (.spaces | with_entries(.value.todos = []))' \
+                > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+        else
+            # Clear todos from specific space only
+            cat "$TODO_DATA_FILE" | jq --arg space "$current_space" \
+                '.spaces[$space].todos = []' \
+                > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+        fi
+
         sketchybar --trigger todo_update
 
         # Show confirmation
