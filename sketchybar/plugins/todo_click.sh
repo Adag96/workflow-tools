@@ -538,36 +538,69 @@ stop_timer() {
         local total_minutes=$((total_duration / 60))
         local total_seconds=$((total_duration % 60))
 
-        # Calculate decimal hours for time logging software
+        local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+        local current_date=$(date "+%Y-%m-%d")
+
+        # Calculate daily total for this todo item (only for today's entries)
+        local daily_total=0
+        if [ -f "$log_file" ]; then
+            # Sum up all session times for this todo item on the current date
+            while IFS= read -r line; do
+                if [[ "$line" =~ ^\[$current_date.*\].*\"$active_timer_text\".*Session:\ ([0-9]+)m\ ([0-9]+)s ]]; then
+                    local prev_minutes="${BASH_REMATCH[1]}"
+                    local prev_seconds="${BASH_REMATCH[2]}"
+                    daily_total=$((daily_total + prev_minutes * 60 + prev_seconds))
+                fi
+            done < "$log_file"
+        fi
+
+        # Add current session to daily total
+        daily_total=$((daily_total + duration))
+
+        local daily_minutes=$((daily_total / 60))
+        local daily_seconds=$((daily_total % 60))
+
+        # Calculate decimal hours for time logging software (based on daily total)
         # Formula: hours = total_seconds / 3600, rounded to 2 decimal places
-        local total_hours
+        local daily_hours
         if command -v bc >/dev/null 2>&1; then
-            total_hours=$(echo "scale=2; $total_duration / 3600" | bc 2>/dev/null)
+            daily_hours=$(echo "scale=2; $daily_total / 3600" | bc 2>/dev/null)
             # Add leading zero if needed (bc sometimes returns .05 instead of 0.05)
-            if [[ "$total_hours" =~ ^\..*$ ]]; then
-                total_hours="0$total_hours"
+            if [[ "$daily_hours" =~ ^\..*$ ]]; then
+                daily_hours="0$daily_hours"
             fi
         else
             # Fallback using awk if bc is not available
-            total_hours=$(awk "BEGIN {printf \"%.2f\", $total_duration / 3600}")
+            daily_hours=$(awk "BEGIN {printf \"%.2f\", $daily_total / 3600}")
         fi
 
         # Ensure we have a valid number with proper format
         # Accept formats like: 0.05, .05, 1.25, 0, etc.
-        if [ -z "$total_hours" ] || [[ ! "$total_hours" =~ ^[0-9]*\.?[0-9]+$ ]]; then
-            total_hours="0.00"
+        if [ -z "$daily_hours" ] || [[ ! "$daily_hours" =~ ^[0-9]*\.?[0-9]+$ ]]; then
+            daily_hours="0.00"
             echo "Debug: Invalid hours calculation, using 0.00" >> /tmp/timer_debug.log
         fi
 
         # Debug the calculation
-        echo "Debug: total_duration=$total_duration, calculated_hours=$total_hours" >> /tmp/timer_debug.log
+        echo "Debug: daily_total=$daily_total, calculated_hours=$daily_hours" >> /tmp/timer_debug.log
 
-        local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+        # Check if we need to add a date separator
+        local last_date=""
+        if [ -f "$log_file" ] && [ -s "$log_file" ]; then
+            # Get the date from the last log entry (not empty lines or separators)
+            last_date=$(grep -E '^\[' "$log_file" | tail -1 | grep -o '^\[[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' | tr -d '[')
+        fi
 
-        # Simple logging approach - just append for now and add clustering later if needed
-        # The clustering was causing issues with macOS bash 3.2 compatibility
+        # Add date separator if this is a new date
+        if [ -n "$last_date" ] && [ "$last_date" != "$current_date" ]; then
+            echo "" >> "$log_file"
+            echo "================================" >> "$log_file"
+            echo "  $current_date" >> "$log_file"
+            echo "================================" >> "$log_file"
+            echo "" >> "$log_file"
+        fi
 
-        # Check if this is a new todo item (different from the last logged item)
+        # Check if this is a new todo item (different from the last logged item on same date)
         local last_logged_item=""
         if [ -f "$log_file" ]; then
             last_logged_item=$(tail -1 "$log_file" 2>/dev/null | grep -o '"[^"]*"' | head -1)
@@ -578,10 +611,10 @@ stop_timer() {
             echo "" >> "$log_file"
         fi
 
-        echo "[$timestamp] \"$active_timer_text\" - Session: ${session_minutes}m ${session_seconds}s | Total: ${total_minutes}m ${total_seconds}s (${total_hours} hours)" >> "$log_file"
+        echo "[$timestamp] \"$active_timer_text\" - Session: ${session_minutes}m ${session_seconds}s | Daily Total: ${daily_minutes}m ${daily_seconds}s (${daily_hours} hours)" >> "$log_file"
 
-        # Show confirmation with time spent including decimal hours
-        osascript -e "display dialog \"⏹ Timer stopped for: ${active_timer_text}\n\nThis session: ${session_minutes}m ${session_seconds}s\nTotal time: ${total_minutes}m ${total_seconds}s\nDecimal hours: ${total_hours}\" with title \"Timer Stopped\" buttons {\"OK\"} default button \"OK\" giving up after 5"
+        # Show confirmation with time spent including decimal hours (showing daily total)
+        osascript -e "display dialog \"⏹ Timer stopped for: ${active_timer_text}\n\nThis session: ${session_minutes}m ${session_seconds}s\nToday's total: ${daily_minutes}m ${daily_seconds}s\nDecimal hours: ${daily_hours}\" with title \"Timer Stopped\" buttons {\"OK\"} default button \"OK\" giving up after 5"
     fi
 
     sketchybar --trigger todo_update
