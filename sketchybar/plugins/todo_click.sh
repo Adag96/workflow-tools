@@ -82,7 +82,7 @@ show_todos_with_actions() {
     local active_timer_count=$(get_current_todos | jq -s '[.[] | select(.completed == false and .timer_start != null)] | length' 2>/dev/null || echo "0")
     local music_timer_active=$(cat "$TODO_DATA_FILE" | jq -r '.music_timer.timer_start // null' 2>/dev/null)
     local timer_button_text
-    if [ "$active_timer_count" -gt 0 ] || [ -n "$music_timer_active" ] && [ "$music_timer_active" != "null" ]; then
+    if [ "$active_timer_count" -gt 0 ] || ([ -n "$music_timer_active" ] && [ "$music_timer_active" != "null" ]); then
         timer_button_text="Stop Item"
     else
         timer_button_text="Start Item"
