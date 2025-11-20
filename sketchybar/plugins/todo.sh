@@ -37,17 +37,24 @@ update_todo_display() {
     local active_timer_count=$(get_current_todos | jq -s '[.[] | select(.completed == false and .timer_start != null)] | length' 2>/dev/null || echo "0")
     local active_timer=$(get_current_todos | jq -s -r '.[] | select(.completed == false and .timer_start != null) | .id' 2>/dev/null | head -1)
 
+    # Check if music timer is active
+    local music_timer_active=$(cat "$TODO_DATA_FILE" | jq -r '.music_timer.timer_start // null' 2>/dev/null)
+
     # Set icon and color based on state
     local icon_color="$RIGHT_TEXT_COLOR"
     local icon="$TODO_ICON"
     local label_text="$active_count"
 
-    if [ -n "$active_timer" ] && [ "$active_timer" != "null" ] && [ "$active_timer" != "" ]; then
-        # Active timer - use accent color and timer icon
+    # Priority: music timer > todo timer > active todos > no todos
+    if [ -n "$music_timer_active" ] && [ "$music_timer_active" != "null" ]; then
+        # Music timer active - use accent color and timer icon
         icon_color="$ACCENT_COLOR"
         icon="$TODO_TIMER_ICON"
-
-        # Show that a timer is active (now only one timer allowed)
+        label_text="🎵"
+    elif [ -n "$active_timer" ] && [ "$active_timer" != "null" ] && [ "$active_timer" != "" ]; then
+        # Active todo timer - use accent color and timer icon
+        icon_color="$ACCENT_COLOR"
+        icon="$TODO_TIMER_ICON"
         label_text="$active_count"
     elif [ "$active_count" -gt 0 ]; then
         # Active todos but no timer - use normal color
@@ -66,8 +73,8 @@ update_todo_display() {
         icon="$icon" \
         icon.color="$icon_color"
 
-    # Show count in label - always show if there are active todos
-    if [ "$active_count" -gt 0 ]; then
+    # Show count in label - always show if there are active todos or music timer
+    if [ "$active_count" -gt 0 ] || [ -n "$music_timer_active" ] && [ "$music_timer_active" != "null" ]; then
         sketchybar --set todo label="$label_text" label.drawing=on
     else
         sketchybar --set todo label.drawing=off

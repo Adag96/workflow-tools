@@ -78,10 +78,11 @@ show_todos_with_actions() {
         todo_list="No todos in this space yet.\n\nUse 'Actions' > 'Add New Item(s)' to get started!"
     fi
 
-    # Check if there's an active timer to determine button text
+    # Check if there's an active timer to determine button text (check both music and todo timers)
     local active_timer_count=$(get_current_todos | jq -s '[.[] | select(.completed == false and .timer_start != null)] | length' 2>/dev/null || echo "0")
+    local music_timer_active=$(cat "$TODO_DATA_FILE" | jq -r '.music_timer.timer_start // null' 2>/dev/null)
     local timer_button_text
-    if [ "$active_timer_count" -gt 0 ]; then
+    if [ "$active_timer_count" -gt 0 ] || [ -n "$music_timer_active" ] && [ "$music_timer_active" != "null" ]; then
         timer_button_text="Stop Item"
     else
         timer_button_text="Start Item"
@@ -146,7 +147,7 @@ show_action_menu() {
     fi
 
     # Always show timer-related options
-    actions+=("Show Time Logs" "Clean Up Logs" "Clear Timer Logs")
+    actions+=("Start Music Timer" "Dump Video Game Bank" "Show Time Logs" "Clean Up Logs" "Clear Timer Logs")
 
     # Create AppleScript list for choose from list
     local script_options=""
@@ -177,6 +178,12 @@ show_action_menu() {
                 ;;
             "Clear All")
                 clear_all_todos
+                ;;
+            "Start Music Timer")
+                start_music_timer
+                ;;
+            "Dump Video Game Bank")
+                dump_video_game_bank
                 ;;
             "Show Time Logs")
                 show_time_logs
@@ -458,6 +465,13 @@ start_timer() {
 }
 
 stop_timer() {
+    # First check if music timer is active
+    if stop_music_timer 2>/dev/null; then
+        # Music timer was stopped successfully
+        return
+    fi
+
+    # If music timer wasn't active, check for todo item timer
     # Find the active timer automatically across all spaces (since we only allow one)
     local active_timer_text=""
     local active_timer_id=""
@@ -584,6 +598,9 @@ stop_timer() {
         # Debug the calculation
         echo "Debug: daily_total=$daily_total, calculated_hours=$daily_hours" >> /tmp/timer_debug.log
 
+        # Build the entire log entry in memory (atomic write for Dropbox)
+        local log_entry=""
+
         # Check if we need to add a date separator
         local last_date=""
         if [ -f "$log_file" ] && [ -s "$log_file" ]; then
@@ -593,11 +610,11 @@ stop_timer() {
 
         # Add date separator if this is a new date
         if [ -n "$last_date" ] && [ "$last_date" != "$current_date" ]; then
-            echo "" >> "$log_file"
-            echo "================================" >> "$log_file"
-            echo "  $current_date" >> "$log_file"
-            echo "================================" >> "$log_file"
-            echo "" >> "$log_file"
+            log_entry="${log_entry}\n"
+            log_entry="${log_entry}================================\n"
+            log_entry="${log_entry}  $current_date\n"
+            log_entry="${log_entry}================================\n"
+            log_entry="${log_entry}\n"
         fi
 
         # Check if this is a new todo item (different from the last logged item on same date)
@@ -608,10 +625,14 @@ stop_timer() {
 
         # Add spacing if this is a different todo item
         if [ -n "$last_logged_item" ] && [ "$last_logged_item" != "\"$active_timer_text\"" ]; then
-            echo "" >> "$log_file"
+            log_entry="${log_entry}\n"
         fi
 
-        echo "[$timestamp] \"$active_timer_text\" - Session: ${session_minutes}m ${session_seconds}s | Daily Total: ${daily_minutes}m ${daily_seconds}s (${daily_hours} hours)" >> "$log_file"
+        # Add the actual log entry
+        log_entry="${log_entry}[$timestamp] \"$active_timer_text\" - Session: ${session_minutes}m ${session_seconds}s | Daily Total: ${daily_minutes}m ${daily_seconds}s (${daily_hours} hours)\n"
+
+        # Write everything in a single operation (atomic for Dropbox)
+        printf "%b" "$log_entry" >> "$log_file"
 
         # Show confirmation with time spent including decimal hours (showing daily total)
         osascript -e "display dialog \"⏹ Timer stopped for: ${active_timer_text}\n\nThis session: ${session_minutes}m ${session_seconds}s\nToday's total: ${daily_minutes}m ${daily_seconds}s\nDecimal hours: ${daily_hours}\" with title \"Timer Stopped\" buttons {\"OK\"} default button \"OK\" giving up after 5"
@@ -791,8 +812,8 @@ clear_timer_logs() {
         echo "# Timer Log - Started $start_date" >> "$log_file"
         echo "" >> "$log_file"
 
-        # Reset all timer durations to 0 across all spaces in the JSON file
-        cat "$TODO_DATA_FILE" | jq '.spaces[].todos[].timer_duration = 0' \
+        # Reset all timer durations to 0 across all spaces in the JSON file, including music timer
+        cat "$TODO_DATA_FILE" | jq '.spaces[].todos[].timer_duration = 0 | .music_timer.timer_duration = 0' \
             > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
 
         # Update the display to reflect reset totals
@@ -800,6 +821,340 @@ clear_timer_logs() {
 
         # Show confirmation
         osascript -e "display dialog \"🗑 Timer logs cleared!\n\nStarted fresh log session for today.\nAll timer totals have been reset to 0.\" with title \"Logs Cleared\" buttons {\"OK\"} default button \"OK\" giving up after 4"
+    fi
+}
+
+# Function to start music production timer (no todo item required)
+start_music_timer() {
+    # Check if there's already an active timer (either music or todo item)
+    local active_todo_timer=$(get_current_todos | jq -s -r '.[] | select(.completed == false and .timer_start != null) | .text' 2>/dev/null | head -1)
+    if [ -n "$active_todo_timer" ]; then
+        osascript -e "display dialog \"Timer already running for: ${active_todo_timer}\n\nStop the current timer before starting a new one.\" with title \"Timer Already Active\" buttons {\"OK\"} default button \"OK\""
+        return
+    fi
+
+    # Check if music timer is already active
+    local music_timer_active=$(cat "$TODO_DATA_FILE" | jq -r '.music_timer.timer_start // null' 2>/dev/null)
+    if [ -n "$music_timer_active" ] && [ "$music_timer_active" != "null" ]; then
+        osascript -e "display dialog \"Video Game Bank timer is already running!\n\nStop the current timer before starting a new one.\" with title \"Timer Already Active\" buttons {\"OK\"} default button \"OK\""
+        return
+    fi
+
+    # Store timestamp as Unix epoch seconds
+    local current_time=$(date +%s)
+
+    # Initialize music_timer object if it doesn't exist, then set timer_start
+    cat "$TODO_DATA_FILE" | jq --argjson time "$current_time" \
+        '.music_timer = {timer_start: $time, timer_duration: (.music_timer.timer_duration // 0)}' \
+        > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+
+    # Force immediate update
+    sketchybar --trigger todo_update
+    sleep 0.1
+    sketchybar --trigger todo_update
+
+    # Show confirmation
+    osascript -e "display dialog \"🎵 Video Game Bank timer started!\" with title \"Timer Started\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+}
+
+# Function to stop music production timer
+stop_music_timer() {
+    local current_time=$(date +%s)
+
+    # Get start time
+    local start_time=$(cat "$TODO_DATA_FILE" | jq -r '.music_timer.timer_start // null' 2>/dev/null)
+
+    if [ "$start_time" = "null" ] || [ -z "$start_time" ]; then
+        return 1  # No music timer active
+    fi
+
+    # Calculate duration
+    local duration=$((current_time - start_time))
+
+    # Ensure duration is positive and reasonable (less than 24 hours)
+    if [ "$duration" -lt 0 ] || [ "$duration" -gt 86400 ]; then
+        echo "Warning: Invalid duration ($duration), using 0" >> /tmp/timer_debug.log
+        duration=0
+    fi
+
+    # Get previous total time and add this session
+    local previous_duration=$(cat "$TODO_DATA_FILE" | jq -r '.music_timer.timer_duration // 0' 2>/dev/null)
+    local total_duration=$((previous_duration + duration))
+
+    # Update the JSON with total time and clear timer_start
+    cat "$TODO_DATA_FILE" | jq --argjson total "$total_duration" \
+        '.music_timer.timer_duration = $total | .music_timer.timer_start = null' \
+        > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+
+    # Log to timer log file
+    local log_file="$CONFIG_DIR/todo_data/timer_log.txt"
+    local session_minutes=$((duration / 60))
+    local session_seconds=$((duration % 60))
+
+    local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+    local current_date=$(date "+%Y-%m-%d")
+
+    # Calculate daily total for Video Game Bank (only for today's entries)
+    local daily_total=0
+    if [ -f "$log_file" ]; then
+        # Sum up all session times for Video Game Bank on the current date
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^\[$current_date.*\].*\"Video\ Game\ Bank\".*Session:\ ([0-9]+)m\ ([0-9]+)s ]]; then
+                local prev_minutes="${BASH_REMATCH[1]}"
+                local prev_seconds="${BASH_REMATCH[2]}"
+                daily_total=$((daily_total + prev_minutes * 60 + prev_seconds))
+            fi
+        done < "$log_file"
+    fi
+
+    # Add current session to daily total
+    daily_total=$((daily_total + duration))
+
+    local daily_minutes=$((daily_total / 60))
+    local daily_seconds=$((daily_total % 60))
+
+    # Calculate decimal hours for time logging software
+    local daily_hours
+    if command -v bc >/dev/null 2>&1; then
+        daily_hours=$(echo "scale=2; $daily_total / 3600" | bc 2>/dev/null)
+        # Add leading zero if needed
+        if [[ "$daily_hours" =~ ^\..*$ ]]; then
+            daily_hours="0$daily_hours"
+        fi
+    else
+        # Fallback using awk if bc is not available
+        daily_hours=$(awk "BEGIN {printf \"%.2f\", $daily_total / 3600}")
+    fi
+
+    # Ensure we have a valid number
+    if [ -z "$daily_hours" ] || [[ ! "$daily_hours" =~ ^[0-9]*\.?[0-9]+$ ]]; then
+        daily_hours="0.00"
+        echo "Debug: Invalid hours calculation, using 0.00" >> /tmp/timer_debug.log
+    fi
+
+    # Build the entire log entry in memory (atomic write for Dropbox)
+    local log_entry=""
+
+    # Check if we need to add a date separator
+    local last_date=""
+    if [ -f "$log_file" ] && [ -s "$log_file" ]; then
+        # Get the date from the last log entry
+        last_date=$(grep -E '^\[' "$log_file" | tail -1 | grep -o '^\[[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' | tr -d '[')
+    fi
+
+    # Add date separator if this is a new date
+    if [ -n "$last_date" ] && [ "$last_date" != "$current_date" ]; then
+        log_entry="${log_entry}\n"
+        log_entry="${log_entry}================================\n"
+        log_entry="${log_entry}  $current_date\n"
+        log_entry="${log_entry}================================\n"
+        log_entry="${log_entry}\n"
+    fi
+
+    # Check if this is a different item from last logged
+    local last_logged_item=""
+    if [ -f "$log_file" ]; then
+        last_logged_item=$(tail -1 "$log_file" 2>/dev/null | grep -o '"[^"]*"' | head -1)
+    fi
+
+    # Add spacing if this is a different item
+    if [ -n "$last_logged_item" ] && [ "$last_logged_item" != "\"Video Game Bank\"" ]; then
+        log_entry="${log_entry}\n"
+    fi
+
+    # Add the actual log entry
+    log_entry="${log_entry}[$timestamp] \"Video Game Bank\" - Session: ${session_minutes}m ${session_seconds}s | Daily Total: ${daily_minutes}m ${daily_seconds}s (${daily_hours} hours)\n"
+
+    # Write everything in a single operation (atomic for Dropbox)
+    printf "%b" "$log_entry" >> "$log_file"
+
+    # Show confirmation
+    osascript -e "display dialog \"🎵 Video Game Bank timer stopped!\n\nThis session: ${session_minutes}m ${session_seconds}s\nToday's total: ${daily_minutes}m ${daily_seconds}s\nDecimal hours: ${daily_hours}\" with title \"Timer Stopped\" buttons {\"OK\"} default button \"OK\" giving up after 5"
+
+    sketchybar --trigger todo_update
+    return 0  # Success
+}
+
+# Function to dump (reset) Video Game Bank timer
+dump_video_game_bank() {
+    # Get current timer duration
+    local current_duration=$(cat "$TODO_DATA_FILE" | jq -r '.music_timer.timer_duration // 0' 2>/dev/null)
+    local current_minutes=$((current_duration / 60))
+
+    # Show dialog with three button options
+    local choice=$(osascript -e "button returned of (display dialog \"Video Game Bank: ${current_minutes} minutes\n\nReset to 0, deduct minutes, or cancel?\" with title \"Dump Video Game Bank\" buttons {\"Cancel\", \"Deduct\", \"Reset\"} default button \"Reset\" cancel button \"Cancel\")" 2>/dev/null)
+
+    if [ $? -ne 0 ] || [ -z "$choice" ]; then
+        # User cancelled
+        return
+    fi
+
+    if [ "$choice" = "Reset" ]; then
+        # Reset the music_timer duration to 0 in the JSON file
+        cat "$TODO_DATA_FILE" | jq '.music_timer.timer_duration = 0' \
+            > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+
+        # Remove all "Video Game Bank" entries from timer log
+        local log_file="$CONFIG_DIR/todo_data/timer_log.txt"
+        if [ -f "$log_file" ]; then
+            # Check if there are any Video Game Bank entries to remove
+            if grep -q '"Video Game Bank"' "$log_file"; then
+                # Create a backup before modifying
+                cp "$log_file" "${log_file}.backup_dump_$(date +%Y%m%d_%H%M%S)"
+
+                # Create a temp file without Video Game Bank entries
+                grep -v '"Video Game Bank"' "$log_file" > "${log_file}.tmp"
+
+                # Only proceed if the temp file has content (more than just the header)
+                if [ -s "${log_file}.tmp" ]; then
+                    # Remove trailing empty date sections
+                    awk '
+                        BEGIN { buffer = "" }
+                        /^================================$/ {
+                            # Store potential date section
+                            sep1 = $0
+                            getline
+                            date_line = $0
+                            getline
+                            sep2 = $0
+                            getline
+                            empty = $0
+
+                            # Read ahead to see if there are entries
+                            has_entries = 0
+                            while (getline > 0) {
+                                if ($0 ~ /^================================$/) {
+                                    # Another separator means this section was empty
+                                    sep1 = $0
+                                    getline
+                                    date_line = $0
+                                    getline
+                                    sep2 = $0
+                                    getline
+                                    empty = $0
+                                } else if ($0 ~ /^\[/) {
+                                    # Found an entry, print the section
+                                    print sep1
+                                    print date_line
+                                    print sep2
+                                    print empty
+                                    print $0
+                                    has_entries = 1
+                                    break
+                                }
+                            }
+
+                            if (has_entries) {
+                                while (getline > 0) {
+                                    print
+                                }
+                            }
+                            next
+                        }
+                        { print }
+                    ' "${log_file}.tmp" > "${log_file}.cleaned"
+
+                    mv "${log_file}.cleaned" "$log_file"
+                else
+                    # If temp file is empty/only header, restore from backup
+                    echo "Warning: Filtering would delete all content, restoring from backup" >> /tmp/timer_debug.log
+                    cp "${log_file}.backup_dump_"* "$log_file" 2>/dev/null || true
+                fi
+
+                rm -f "${log_file}.tmp"
+            fi
+        fi
+
+        # Update the display
+        sketchybar --trigger todo_update
+
+        # Show confirmation
+        osascript -e "display dialog \"🗑 Video Game Bank timer has been reset to 0!\n\nAll Video Game Bank log entries have been removed.\" with title \"Timer Dumped\" buttons {\"OK\"} default button \"OK\" giving up after 3"
+
+    elif [ "$choice" = "Deduct" ]; then
+        # Ask user for number of minutes to deduct
+        local minutes_to_deduct=$(osascript -e 'text returned of (display dialog "Enter number of minutes to deduct from Video Game Bank:" with title "Deduct Minutes" default answer "0")' 2>/dev/null)
+
+        if [ -z "$minutes_to_deduct" ] || ! [[ "$minutes_to_deduct" =~ ^[0-9]+$ ]]; then
+            # Invalid input or cancelled
+            osascript -e "display dialog \"Invalid input. No changes made.\" with title \"Error\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+            return
+        fi
+
+        # Convert minutes to seconds and deduct from current duration
+        local seconds_to_deduct=$((minutes_to_deduct * 60))
+        local new_duration=$((current_duration - seconds_to_deduct))
+
+        # Ensure we don't go below 0
+        if [ $new_duration -lt 0 ]; then
+            new_duration=0
+        fi
+
+        # Update the JSON file with new duration
+        cat "$TODO_DATA_FILE" | jq --argjson new_dur "$new_duration" '.music_timer.timer_duration = $new_dur' \
+            > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+
+        # Add deduction entry to timer log with current balance
+        local log_file="$CONFIG_DIR/todo_data/timer_log.txt"
+        local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+        local current_date=$(date "+%Y-%m-%d")
+        local new_minutes=$((new_duration / 60))
+        local new_seconds=$((new_duration % 60))
+
+        # Calculate decimal hours for new balance
+        local balance_hours
+        if command -v bc >/dev/null 2>&1; then
+            balance_hours=$(echo "scale=2; $new_duration / 3600" | bc 2>/dev/null)
+            if [[ "$balance_hours" =~ ^\..*$ ]]; then
+                balance_hours="0$balance_hours"
+            fi
+        else
+            balance_hours=$(awk "BEGIN {printf \"%.2f\", $new_duration / 3600}")
+        fi
+        if [ -z "$balance_hours" ] || [[ ! "$balance_hours" =~ ^[0-9]*\.?[0-9]+$ ]]; then
+            balance_hours="0.00"
+        fi
+
+        # Build log entry for deduction
+        local log_entry=""
+
+        # Check if we need to add a date separator
+        local last_date=""
+        if [ -f "$log_file" ] && [ -s "$log_file" ]; then
+            last_date=$(grep -E '^\[' "$log_file" | tail -1 | grep -o '^\[[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' | tr -d '[')
+        fi
+
+        # Add date separator if this is a new date
+        if [ -n "$last_date" ] && [ "$last_date" != "$current_date" ]; then
+            log_entry="${log_entry}\n"
+            log_entry="${log_entry}================================\n"
+            log_entry="${log_entry}  $current_date\n"
+            log_entry="${log_entry}================================\n"
+            log_entry="${log_entry}\n"
+        fi
+
+        # Check if last item was different
+        local last_logged_item=""
+        if [ -f "$log_file" ]; then
+            last_logged_item=$(tail -1 "$log_file" 2>/dev/null | grep -o '"[^"]*"' | head -1)
+        fi
+
+        # Add spacing if needed
+        if [ -n "$last_logged_item" ] && [ "$last_logged_item" != "\"Video Game Bank\"" ]; then
+            log_entry="${log_entry}\n"
+        fi
+
+        # Add the deduction entry with current balance
+        log_entry="${log_entry}[$timestamp] \"Video Game Bank\" - Deducted: ${minutes_to_deduct}m | Current Balance: ${new_minutes}m ${new_seconds}s (${balance_hours} hours)\n"
+
+        # Write to log file atomically
+        printf "%b" "$log_entry" >> "$log_file"
+
+        # Update the display
+        sketchybar --trigger todo_update
+
+        # Show confirmation
+        osascript -e "display dialog \"✅ Deducted ${minutes_to_deduct} minutes from Video Game Bank!\n\nPrevious: ${current_minutes} minutes\nNew total: ${new_minutes} minutes\" with title \"Minutes Deducted\" buttons {\"OK\"} default button \"OK\" giving up after 4"
     fi
 }
 
