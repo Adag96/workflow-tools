@@ -74,7 +74,7 @@ update_todo_display() {
         icon.color="$icon_color"
 
     # Show count in label - always show if there are active todos or music timer
-    if [ "$active_count" -gt 0 ] || [ -n "$music_timer_active" ] && [ "$music_timer_active" != "null" ]; then
+    if [ "$active_count" -gt 0 ] || { [ -n "$music_timer_active" ] && [ "$music_timer_active" != "null" ]; }; then
         sketchybar --set todo label="$label_text" label.drawing=on
     else
         sketchybar --set todo label.drawing=off
