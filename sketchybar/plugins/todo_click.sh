@@ -622,7 +622,6 @@ stop_timer() {
         if [ -f "$log_file" ]; then
             last_logged_item=$(tail -1 "$log_file" 2>/dev/null | grep -o '"[^"]*"' | head -1)
         fi
-
         # Add spacing if this is a different todo item
         if [ -n "$last_logged_item" ] && [ "$last_logged_item" != "\"$active_timer_text\"" ]; then
             log_entry="${log_entry}\n"
@@ -632,7 +631,17 @@ stop_timer() {
         log_entry="${log_entry}[$timestamp] \"$active_timer_text\" - Session: ${session_minutes}m ${session_seconds}s | Daily Total: ${daily_minutes}m ${daily_seconds}s (${daily_hours} hours)\n"
 
         # Write everything in a single operation (atomic for Dropbox)
-        printf "%b" "$log_entry" >> "$log_file"
+        # Use a temp file and sync to ensure write completes (helps with Dropbox sync issues)
+        local temp_entry_file=$(mktemp)
+        printf "%b" "$log_entry" > "$temp_entry_file"
+        cat "$temp_entry_file" >> "$log_file"
+        local write_result=$?
+        rm -f "$temp_entry_file"
+        sync  # Force filesystem sync
+
+        if [ $write_result -ne 0 ]; then
+            echo "ERROR: Failed to write to timer log for '$active_timer_text'" >> /tmp/timer_debug.log
+        fi
 
         # Show confirmation with time spent including decimal hours (showing daily total)
         osascript -e "display dialog \"⏹ Timer stopped for: ${active_timer_text}\n\nThis session: ${session_minutes}m ${session_seconds}s\nToday's total: ${daily_minutes}m ${daily_seconds}s\nDecimal hours: ${daily_hours}\" with title \"Timer Stopped\" buttons {\"OK\"} default button \"OK\" giving up after 5"
