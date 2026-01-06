@@ -21,7 +21,7 @@ sketchybar --add slider volume right \
            \
            --add item volume_icon right \
            --set volume_icon \
-             icon.font="$ICON_FONT:Regular:$FONT_SIZE_XL.0" \
+             icon.font="$ICON_FONT:Regular:$((FONT_SIZE_XL - 1)).0" \
              icon.color=$RIGHT_TEXT_COLOR \
              label.drawing=off \
              click_script="$PLUGIN_DIR/volume_click.sh" \

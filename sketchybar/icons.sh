@@ -33,6 +33,14 @@ export PAUSE_TIMER_ICON="􀊘"
 export TODO_ICON="􀆅"        # checkmark
 export TODO_TIMER_ICON="􀐭"  # timer
 
+# Todo space icons (SF Symbols)
+export TODO_SPACE_ALL="􀋲"           # list.bullet
+export TODO_SPACE_UJAM="􀤨"          # building.2.fill
+export TODO_SPACE_LONEBODY="􀑪"      # music.note
+export TODO_SPACE_PERSONAL="􀉩"      # person.fill
+export TODO_SPACE_60_PLEASANT="􀎞"   # house
+export TODO_SPACE_WORKFLOW="􀍟"      # gearshape
+
 # WiFi widget icons
 # WIFI_ICONS=(
 #   wifi.high=􀽗

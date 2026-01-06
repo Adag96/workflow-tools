@@ -131,7 +131,7 @@ show_action_menu() {
     # Build action options based on current state
     local actions=("Add New Item(s)")
     if [ "$active_count" -gt 0 ]; then
-        actions+=("Complete Todo")
+        actions+=("Complete Todo(s)")
     fi
 
     if [ "$total_count" -gt 0 ]; then
@@ -167,8 +167,8 @@ show_action_menu() {
             "Add New Item(s)")
                 add_todo
                 ;;
-            "Complete Todo")
-                complete_todo
+            "Complete Todo(s)")
+                complete_todos
                 ;;
             "Delete Todo")
                 delete_todo
@@ -269,8 +269,8 @@ add_todo() {
     fi
 }
 
-complete_todo() {
-    # Use different approach to handle todos with spaces
+complete_todos() {
+    # Multi-select version - complete one or more todos at once
     local todo_count=$(get_current_todos | jq -s '[.[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
     if [ "$todo_count" -eq 0 ]; then
         osascript -e 'display dialog "No active todos to complete!" with title "Info" buttons {"OK"} default button "OK"'
@@ -292,42 +292,72 @@ complete_todo() {
         fi
     done <<< "$todos_text"
 
-    local selected=$(osascript -e "choose from list {${script_options}} with title \"Mark Todo as Complete\" with prompt \"Select todo to mark as completed:\"")
-
-    if [ "$selected" != "false" ]; then
-        # Find the todo ID by text across spaces
-        local current_space=$(cat "$TODO_DATA_FILE" | jq -r '.current_space' 2>/dev/null || echo "ALL")
-
-        if [ "$current_space" = "ALL" ]; then
-            # For ALL view, find which space contains this todo and complete it there
-            local space_list=$(cat "$TODO_DATA_FILE" | jq -r '.spaces | keys[]' 2>/dev/null)
-            while IFS= read -r space; do
-                if [ -n "$space" ]; then
-                    local todo_id=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$space" --arg text "$selected" '.spaces[$space].todos[] | select(.text == $text and .completed == false) | .id' 2>/dev/null)
-                    if [ -n "$todo_id" ] && [ "$todo_id" != "null" ]; then
-                        # Mark todo as completed
-                        cat "$TODO_DATA_FILE" | jq --arg space "$space" --argjson id "$todo_id" \
-                            '(.spaces[$space].todos[] | select(.id == $id)).completed = true' \
-                            > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
-                        break
-                    fi
-                fi
-            done <<< "$space_list"
+    # Use multi-select AppleScript dialog - return items separated by newlines to avoid comma issues
+    local selected=$(osascript -e "
+        set selectedItems to choose from list {${script_options}} with title \"Mark Todo(s) as Complete\" with prompt \"Select todo(s) to mark as completed:\" with multiple selections allowed
+        if selectedItems is false then
+            return \"false\"
         else
-            # For specific space view, complete in current space
-            local todo_id=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$current_space" --arg text "$selected" '.spaces[$space].todos[] | select(.text == $text and .completed == false) | .id' 2>/dev/null)
-            if [ -n "$todo_id" ] && [ "$todo_id" != "null" ]; then
-                # Mark todo as completed
-                cat "$TODO_DATA_FILE" | jq --arg space "$current_space" --argjson id "$todo_id" \
-                    '(.spaces[$space].todos[] | select(.id == $id)).completed = true' \
-                    > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+            set output to \"\"
+            repeat with anItem in selectedItems
+                if output is \"\" then
+                    set output to anItem as text
+                else
+                    set output to output & \"\n\" & (anItem as text)
+                end if
+            end repeat
+            return output
+        end if
+    ")
+
+    if [ "$selected" != "false" ] && [ -n "$selected" ]; then
+        local current_space=$(cat "$TODO_DATA_FILE" | jq -r '.current_space' 2>/dev/null || echo "ALL")
+        local completed_count=0
+
+        # Process each selected item (now separated by newlines)
+        while IFS= read -r selected_item; do
+            # Skip empty items
+            [ -z "$selected_item" ] && continue
+
+            if [ "$current_space" = "ALL" ]; then
+                # For ALL view, find which space contains this todo and complete it there
+                local space_list=$(cat "$TODO_DATA_FILE" | jq -r '.spaces | keys[]' 2>/dev/null)
+                while IFS= read -r space; do
+                    if [ -n "$space" ]; then
+                        local todo_id=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$space" --arg text "$selected_item" '.spaces[$space].todos[] | select(.text == $text and .completed == false) | .id' 2>/dev/null)
+                        if [ -n "$todo_id" ] && [ "$todo_id" != "null" ]; then
+                            # Mark todo as completed
+                            cat "$TODO_DATA_FILE" | jq --arg space "$space" --argjson id "$todo_id" \
+                                '(.spaces[$space].todos[] | select(.id == $id)).completed = true' \
+                                > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+                            completed_count=$((completed_count + 1))
+                            break
+                        fi
+                    fi
+                done <<< "$space_list"
+            else
+                # For specific space view, complete in current space
+                local todo_id=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$current_space" --arg text "$selected_item" '.spaces[$space].todos[] | select(.text == $text and .completed == false) | .id' 2>/dev/null)
+                if [ -n "$todo_id" ] && [ "$todo_id" != "null" ]; then
+                    # Mark todo as completed
+                    cat "$TODO_DATA_FILE" | jq --arg space "$current_space" --argjson id "$todo_id" \
+                        '(.spaces[$space].todos[] | select(.id == $id)).completed = true' \
+                        > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
+                    completed_count=$((completed_count + 1))
+                fi
             fi
-        fi
+        done <<< "$selected"
 
         sketchybar --trigger todo_update
 
-        # Show confirmation
-        osascript -e "display dialog \"✓ Completed: ${selected}\" with title \"Todo Completed\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+        # Show confirmation with count
+        if [ "$completed_count" -eq 1 ]; then
+            osascript -e "display dialog \"✓ Completed 1 todo!\" with title \"Todo Completed\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+        elif [ "$completed_count" -gt 1 ]; then
+            osascript -e "display dialog \"✓ Completed ${completed_count} todos!\" with title \"Todos Completed\" buttons {\"OK\"} default button \"OK\" giving up after 2"
+        else
+            osascript -e "display dialog \"Could not complete the selected todo(s). Please try again.\" with title \"Error\" buttons {\"OK\"} default button \"OK\""
+        fi
     fi
 }
 
