@@ -3,6 +3,9 @@
 CONFIG_DIR="$HOME/workflow-tools/sketchybar"
 TODO_DATA_FILE="$CONFIG_DIR/todo_data/todos.json"
 
+# Source icons for SF Symbols
+source "$CONFIG_DIR/icons.sh"
+
 # Helper function to get all todos from current space view
 get_current_todos() {
     local current_space=$(cat "$TODO_DATA_FILE" | jq -r '.current_space' 2>/dev/null || echo "ALL")
@@ -16,16 +19,288 @@ get_current_todos() {
     fi
 }
 
+# Helper function to get SF Symbol icon for a space name (used in dialogs)
+get_space_sf_icon() {
+    local space_name="$1"
+    case "$space_name" in
+        "ALL")
+            echo "$TODO_SPACE_ALL"
+            ;;
+        "Ujam")
+            echo "$TODO_SPACE_UJAM"
+            ;;
+        "Lonebody")
+            echo "$TODO_SPACE_LONEBODY"
+            ;;
+        "Personal")
+            echo "$TODO_SPACE_PERSONAL"
+            ;;
+        "60 Pleasant")
+            echo "$TODO_SPACE_60_PLEASANT"
+            ;;
+        "Workflow Tools")
+            echo "$TODO_SPACE_WORKFLOW"
+            ;;
+        *)
+            echo "$TODO_SPACE_ALL"
+            ;;
+    esac
+}
+
 # Helper function to get current space info
 get_current_space_info() {
     local current_space=$(cat "$TODO_DATA_FILE" | jq -r '.current_space' 2>/dev/null || echo "ALL")
+    local sf_icon=$(get_space_sf_icon "$current_space")
+    echo "$sf_icon $current_space"
+}
 
-    if [ "$current_space" = "ALL" ]; then
-        echo "📋 ALL"
-    else
-        local color=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$current_space" '.spaces[$space].color' 2>/dev/null || echo "📋")
-        echo "$color $current_space"
+# Helper function to write organized timer logs
+# Format: Date -> Space -> Task (grouped)
+# Args: $1=space_name, $2=task_name, $3=session_seconds, $4=daily_total_seconds, $5=daily_hours
+write_organized_log() {
+    local space_name="$1"
+    local task_name="$2"
+    local session_seconds="$3"
+    local daily_total="$4"
+    local daily_hours="$5"
+
+    local log_file="$CONFIG_DIR/todo_data/timer_log.txt"
+    local current_date=$(date "+%Y-%m-%d")
+    local current_time=$(date "+%H:%M:%S")
+
+    local session_minutes=$((session_seconds / 60))
+    local session_secs=$((session_seconds % 60))
+    local daily_minutes=$((daily_total / 60))
+    local daily_secs=$((daily_total % 60))
+
+    # Create log file if it doesn't exist
+    if [ ! -f "$log_file" ]; then
+        echo "# Timer Log" > "$log_file"
+        echo "" >> "$log_file"
     fi
+
+    # Read the entire file
+    local file_content=$(cat "$log_file")
+
+    # Check if today's date section exists
+    local date_header="================================"
+    local date_line="  $current_date"
+
+    if ! echo "$file_content" | grep -q "^  $current_date$"; then
+        # Date section doesn't exist - append it at the end
+        {
+            echo ""
+            echo "$date_header"
+            echo "$date_line"
+            echo "$date_header"
+            echo ""
+            echo "--- $space_name ---"
+            echo "  \"$task_name\""
+            echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)"
+        } >> "$log_file"
+    else
+        # Date section exists - need to find the right place to insert
+        # Use awk to process and insert at the right location
+        local temp_file=$(mktemp)
+
+        awk -v date="$current_date" \
+            -v space="$space_name" \
+            -v task="$task_name" \
+            -v time="$current_time" \
+            -v session_min="$session_minutes" \
+            -v session_sec="$session_secs" \
+            -v daily_min="$daily_minutes" \
+            -v daily_sec="$daily_secs" \
+            -v daily_hrs="$daily_hours" '
+        BEGIN {
+            in_target_date = 0
+            found_space = 0
+            found_task = 0
+            entry_written = 0
+            date_header = "  " date
+            space_header = "--- " space " ---"
+            task_header = "  \"" task "\""
+            new_entry = "    [" time "] Session: " session_min "m " session_sec "s | Daily Total: " daily_min "m " daily_sec "s (" daily_hrs " hours)"
+        }
+
+        # Track when we enter/exit target date section
+        /^  [0-9]{4}-[0-9]{2}-[0-9]{2}$/ {
+            if ($0 == date_header) {
+                in_target_date = 1
+            } else if (in_target_date) {
+                # New date section starting, we need to write before this if not written
+                if (!entry_written) {
+                    if (!found_space) {
+                        print ""
+                        print space_header
+                        print task_header
+                        print new_entry
+                    } else if (!found_task) {
+                        print task_header
+                        print new_entry
+                    }
+                    entry_written = 1
+                }
+                in_target_date = 0
+                found_space = 0
+                found_task = 0
+            }
+        }
+
+        # Track space headers within target date
+        in_target_date && /^--- .* ---$/ {
+            if (!entry_written && found_space && !found_task) {
+                # Previous space didnt have our task, write it before this new space
+                print task_header
+                print new_entry
+                entry_written = 1
+            }
+            if ($0 == space_header) {
+                found_space = 1
+            } else {
+                found_space = 0
+            }
+            found_task = 0
+        }
+
+        # Track task headers within target space
+        in_target_date && found_space && /^  ".*"$/ {
+            if (!entry_written && found_task) {
+                # Previous task wasnt ours, we need to check if this one is
+            }
+            if ($0 == task_header) {
+                found_task = 1
+            } else if (found_task && !entry_written) {
+                # We found our task before, now seeing new task - write entry first
+                print new_entry
+                entry_written = 1
+            }
+        }
+
+        # If we see an entry line after finding our task, print the current line
+        # and mark where to append after the last entry
+        in_target_date && found_space && found_task && /^    \[/ {
+            # This is an entry under our task - remember we might need to append after
+        }
+
+        {
+            print
+            # After printing a task entry, check if we need to append
+            if (in_target_date && found_space && found_task && !entry_written && /^    \[/) {
+                # Peek ahead - if next line is not an entry, write now
+                # We cant peek in awk easily, so we use a different approach
+            }
+        }
+
+        END {
+            if (!entry_written) {
+                if (!found_space) {
+                    print ""
+                    print space_header
+                    print task_header
+                    print new_entry
+                } else if (!found_task) {
+                    print task_header
+                    print new_entry
+                } else {
+                    print new_entry
+                }
+            }
+        }
+        ' "$log_file" > "$temp_file"
+
+        # The awk approach is complex - lets use a simpler Python-like approach with bash
+        # Actually, lets rewrite this more simply
+        rm -f "$temp_file"
+
+        # Simpler approach: rebuild the relevant section
+        local temp_file=$(mktemp)
+        local in_date=0
+        local in_space=0
+        local in_task=0
+        local wrote_entry=0
+        local prev_line=""
+
+        while IFS= read -r line || [ -n "$line" ]; do
+            # Check for date header
+            if [[ "$line" == "  $current_date" ]]; then
+                in_date=1
+                in_space=0
+                in_task=0
+            elif [[ "$line" =~ ^\ \ [0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && [ $in_date -eq 1 ]; then
+                # Different date - write pending entry before leaving
+                if [ $wrote_entry -eq 0 ]; then
+                    if [ $in_space -eq 0 ]; then
+                        echo "" >> "$temp_file"
+                        echo "--- $space_name ---" >> "$temp_file"
+                        echo "  \"$task_name\"" >> "$temp_file"
+                        echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+                    elif [ $in_task -eq 0 ]; then
+                        echo "  \"$task_name\"" >> "$temp_file"
+                        echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+                    else
+                        echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+                    fi
+                    wrote_entry=1
+                fi
+                in_date=0
+                in_space=0
+                in_task=0
+            fi
+
+            # Check for space header within date
+            if [ $in_date -eq 1 ] && [[ "$line" == "--- $space_name ---" ]]; then
+                in_space=1
+                in_task=0
+            elif [ $in_date -eq 1 ] && [[ "$line" =~ ^---\ .*\ ---$ ]]; then
+                # Different space - write task before if we were in our space without finding task
+                if [ $in_space -eq 1 ] && [ $in_task -eq 0 ] && [ $wrote_entry -eq 0 ]; then
+                    echo "  \"$task_name\"" >> "$temp_file"
+                    echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+                    wrote_entry=1
+                fi
+                in_space=0
+                in_task=0
+            fi
+
+            # Check for task header within space
+            if [ $in_date -eq 1 ] && [ $in_space -eq 1 ] && [[ "$line" == "  \"$task_name\"" ]]; then
+                in_task=1
+            elif [ $in_date -eq 1 ] && [ $in_space -eq 1 ] && [[ "$line" =~ ^\ \ \" ]]; then
+                # Different task - write entry before if we were in our task
+                if [ $in_task -eq 1 ] && [ $wrote_entry -eq 0 ]; then
+                    echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+                    wrote_entry=1
+                fi
+                in_task=0
+            fi
+
+            echo "$line" >> "$temp_file"
+            prev_line="$line"
+        done < "$log_file"
+
+        # Handle end of file
+        if [ $wrote_entry -eq 0 ]; then
+            if [ $in_date -eq 0 ]; then
+                # Should not happen since we checked date exists
+                :
+            elif [ $in_space -eq 0 ]; then
+                echo "" >> "$temp_file"
+                echo "--- $space_name ---" >> "$temp_file"
+                echo "  \"$task_name\"" >> "$temp_file"
+                echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+            elif [ $in_task -eq 0 ]; then
+                echo "  \"$task_name\"" >> "$temp_file"
+                echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+            else
+                echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+            fi
+        fi
+
+        mv "$temp_file" "$log_file"
+    fi
+
+    sync  # Force filesystem sync for Dropbox
 }
 
 # Function to show todos directly with action buttons
@@ -147,7 +422,7 @@ show_action_menu() {
     fi
 
     # Always show timer-related options
-    actions+=("Start Music Timer" "Dump Video Game Bank" "Show Time Logs" "Clean Up Logs" "Clear Timer Logs")
+    actions+=("Start Music Timer" "Dump Video Game Bank" "Show Time Logs" "Clear Timer Logs")
 
     # Create AppleScript list for choose from list
     local script_options=""
@@ -187,9 +462,6 @@ show_action_menu() {
                 ;;
             "Show Time Logs")
                 show_time_logs
-                ;;
-            "Clean Up Logs")
-                clean_up_logs
                 ;;
             "Clear Timer Logs")
                 clear_timer_logs
@@ -575,22 +847,21 @@ stop_timer() {
             '(.spaces[$space].todos[] | select(.id == $id)) |= (.timer_duration = $total | .timer_start = null)' \
             > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
 
-        # Log to timer log file
+        # Calculate daily total for this task (for display and logging)
         local log_file="$CONFIG_DIR/todo_data/timer_log.txt"
-        local session_minutes=$((duration / 60))
-        local session_seconds=$((duration % 60))
-        local total_minutes=$((total_duration / 60))
-        local total_seconds=$((total_duration % 60))
-
-        local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
         local current_date=$(date "+%Y-%m-%d")
-
-        # Calculate daily total for this todo item (only for today's entries)
         local daily_total=0
+
         if [ -f "$log_file" ]; then
-            # Sum up all session times for this todo item on the current date
+            # Sum up all session times for this todo item on the current date (check new format)
             while IFS= read -r line; do
-                if [[ "$line" =~ ^\[$current_date.*\].*\"$active_timer_text\".*Session:\ ([0-9]+)m\ ([0-9]+)s ]]; then
+                # Match new format: lines starting with spaces and brackets under task headers
+                if [[ "$line" =~ ^\ +\[.*Session:\ ([0-9]+)m\ ([0-9]+)s ]]; then
+                    local prev_minutes="${BASH_REMATCH[1]}"
+                    local prev_seconds="${BASH_REMATCH[2]}"
+                    daily_total=$((daily_total + prev_minutes * 60 + prev_seconds))
+                # Also match old format for backwards compatibility
+                elif [[ "$line" =~ ^\[$current_date.*\].*\"$active_timer_text\".*Session:\ ([0-9]+)m\ ([0-9]+)s ]]; then
                     local prev_minutes="${BASH_REMATCH[1]}"
                     local prev_seconds="${BASH_REMATCH[2]}"
                     daily_total=$((daily_total + prev_minutes * 60 + prev_seconds))
@@ -601,79 +872,30 @@ stop_timer() {
         # Add current session to daily total
         daily_total=$((daily_total + duration))
 
+        local session_minutes=$((duration / 60))
+        local session_seconds=$((duration % 60))
         local daily_minutes=$((daily_total / 60))
         local daily_seconds=$((daily_total % 60))
 
-        # Calculate decimal hours for time logging software (based on daily total)
-        # Formula: hours = total_seconds / 3600, rounded to 2 decimal places
+        # Calculate decimal hours for time logging software
         local daily_hours
         if command -v bc >/dev/null 2>&1; then
             daily_hours=$(echo "scale=2; $daily_total / 3600" | bc 2>/dev/null)
-            # Add leading zero if needed (bc sometimes returns .05 instead of 0.05)
             if [[ "$daily_hours" =~ ^\..*$ ]]; then
                 daily_hours="0$daily_hours"
             fi
         else
-            # Fallback using awk if bc is not available
             daily_hours=$(awk "BEGIN {printf \"%.2f\", $daily_total / 3600}")
         fi
 
-        # Ensure we have a valid number with proper format
-        # Accept formats like: 0.05, .05, 1.25, 0, etc.
         if [ -z "$daily_hours" ] || [[ ! "$daily_hours" =~ ^[0-9]*\.?[0-9]+$ ]]; then
             daily_hours="0.00"
-            echo "Debug: Invalid hours calculation, using 0.00" >> /tmp/timer_debug.log
         fi
 
-        # Debug the calculation
-        echo "Debug: daily_total=$daily_total, calculated_hours=$daily_hours" >> /tmp/timer_debug.log
+        # Write to organized log (Date -> Space -> Task hierarchy)
+        write_organized_log "$active_timer_space" "$active_timer_text" "$duration" "$daily_total" "$daily_hours"
 
-        # Build the entire log entry in memory (atomic write for Dropbox)
-        local log_entry=""
-
-        # Check if we need to add a date separator
-        local last_date=""
-        if [ -f "$log_file" ] && [ -s "$log_file" ]; then
-            # Get the date from the last log entry (not empty lines or separators)
-            last_date=$(grep -E '^\[' "$log_file" | tail -1 | grep -o '^\[[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' | tr -d '[')
-        fi
-
-        # Add date separator if this is a new date
-        if [ -n "$last_date" ] && [ "$last_date" != "$current_date" ]; then
-            log_entry="${log_entry}\n"
-            log_entry="${log_entry}================================\n"
-            log_entry="${log_entry}  $current_date\n"
-            log_entry="${log_entry}================================\n"
-            log_entry="${log_entry}\n"
-        fi
-
-        # Check if this is a new todo item (different from the last logged item on same date)
-        local last_logged_item=""
-        if [ -f "$log_file" ]; then
-            last_logged_item=$(tail -1 "$log_file" 2>/dev/null | grep -o '"[^"]*"' | head -1)
-        fi
-        # Add spacing if this is a different todo item
-        if [ -n "$last_logged_item" ] && [ "$last_logged_item" != "\"$active_timer_text\"" ]; then
-            log_entry="${log_entry}\n"
-        fi
-
-        # Add the actual log entry
-        log_entry="${log_entry}[$timestamp] \"$active_timer_text\" - Session: ${session_minutes}m ${session_seconds}s | Daily Total: ${daily_minutes}m ${daily_seconds}s (${daily_hours} hours)\n"
-
-        # Write everything in a single operation (atomic for Dropbox)
-        # Use a temp file and sync to ensure write completes (helps with Dropbox sync issues)
-        local temp_entry_file=$(mktemp)
-        printf "%b" "$log_entry" > "$temp_entry_file"
-        cat "$temp_entry_file" >> "$log_file"
-        local write_result=$?
-        rm -f "$temp_entry_file"
-        sync  # Force filesystem sync
-
-        if [ $write_result -ne 0 ]; then
-            echo "ERROR: Failed to write to timer log for '$active_timer_text'" >> /tmp/timer_debug.log
-        fi
-
-        # Show confirmation with time spent including decimal hours (showing daily total)
+        # Show confirmation with time spent
         osascript -e "display dialog \"⏹ Timer stopped for: ${active_timer_text}\n\nThis session: ${session_minutes}m ${session_seconds}s\nToday's total: ${daily_minutes}m ${daily_seconds}s\nDecimal hours: ${daily_hours}\" with title \"Timer Stopped\" buttons {\"OK\"} default button \"OK\" giving up after 5"
     fi
 
@@ -763,66 +985,6 @@ show_time_logs() {
 
     # Open the log file directly in the default text editor
     open "$log_file"
-}
-
-clean_up_logs() {
-    local log_file="$CONFIG_DIR/todo_data/timer_log.txt"
-
-    # Check if timer log exists and has content
-    if [ ! -f "$log_file" ] || [ ! -s "$log_file" ]; then
-        osascript -e 'display dialog "No timer logs to clean up!" with title "Info" buttons {"OK"} default button "OK"'
-        return
-    fi
-
-    # Count existing log entries
-    local log_count=$(grep -c "^\[" "$log_file" 2>/dev/null || echo "0")
-
-    if [ "$log_count" -eq 0 ]; then
-        osascript -e 'display dialog "No timer entries to cluster!" with title "Info" buttons {"OK"} default button "OK"'
-        return
-    fi
-
-    # Show confirmation with explanation
-    local confirm=$(osascript -e "display dialog \"Clean up timer logs by grouping entries by todo item?\n\nThis will reorganize ${log_count} log entries to cluster all time entries for each todo together for easier review.\" with title \"Clean Up Logs\" buttons {\"Cancel\", \"Clean Up\"} default button \"Clean Up\"")
-
-    local confirmed=$(echo "$confirm" | grep -o 'button returned:[^,}]*' | cut -d: -f2)
-
-    if [ "$confirmed" = "Clean Up" ]; then
-        # Create temp files
-        local temp_log="${log_file}.clustered"
-        local temp_entries="${log_file}.entries"
-
-        # Extract header
-        head -2 "$log_file" > "$temp_log"
-
-        # Extract all log entries (lines starting with [)
-        grep '^\[' "$log_file" > "$temp_entries" 2>/dev/null || true
-
-        if [ -s "$temp_entries" ]; then
-            # Get unique todo names in order of first appearance
-            local todo_names=$(awk -F'"' '{if(NF>=3) print $2}' "$temp_entries" | awk '!seen[$0]++')
-
-            # Write entries grouped by todo name
-            echo "$todo_names" | while IFS= read -r todo_name; do
-                if [ -n "$todo_name" ]; then
-                    # Find all entries for this todo and write them
-                    grep "\"$todo_name\"" "$temp_entries" >> "$temp_log"
-                    echo "" >> "$temp_log"
-                fi
-            done
-
-            # Replace original file with clustered version
-            mv "$temp_log" "$log_file"
-            rm -f "$temp_entries"
-
-            # Show success message
-            osascript -e "display dialog \"✅ Timer logs cleaned up!\n\nEntries are now grouped by todo item for easier review.\" with title \"Logs Cleaned Up\" buttons {\"OK\"} default button \"OK\" giving up after 3"
-        else
-            # Clean up temp files if something went wrong
-            rm -f "$temp_log" "$temp_entries"
-            osascript -e 'display dialog "No timer entries found to cluster!" with title "Info" buttons {"OK"} default button "OK"'
-        fi
-    fi
 }
 
 clear_timer_logs() {
@@ -925,20 +1087,21 @@ stop_music_timer() {
         '.music_timer.timer_duration = $total | .music_timer.timer_start = null' \
         > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
 
-    # Log to timer log file
+    # Calculate daily total for display and logging
     local log_file="$CONFIG_DIR/todo_data/timer_log.txt"
-    local session_minutes=$((duration / 60))
-    local session_seconds=$((duration % 60))
-
-    local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
     local current_date=$(date "+%Y-%m-%d")
-
-    # Calculate daily total for Video Game Bank (only for today's entries)
     local daily_total=0
+
     if [ -f "$log_file" ]; then
-        # Sum up all session times for Video Game Bank on the current date
+        # Sum up all session times for Video Game Bank on the current date (check new format)
         while IFS= read -r line; do
-            if [[ "$line" =~ ^\[$current_date.*\].*\"Video\ Game\ Bank\".*Session:\ ([0-9]+)m\ ([0-9]+)s ]]; then
+            # Match new format: lines starting with spaces and brackets under task headers
+            if [[ "$line" =~ ^\ +\[.*Session:\ ([0-9]+)m\ ([0-9]+)s ]]; then
+                local prev_minutes="${BASH_REMATCH[1]}"
+                local prev_seconds="${BASH_REMATCH[2]}"
+                daily_total=$((daily_total + prev_minutes * 60 + prev_seconds))
+            # Also match old format for backwards compatibility
+            elif [[ "$line" =~ ^\[$current_date.*\].*\"Video\ Game\ Bank\".*Session:\ ([0-9]+)m\ ([0-9]+)s ]]; then
                 local prev_minutes="${BASH_REMATCH[1]}"
                 local prev_seconds="${BASH_REMATCH[2]}"
                 daily_total=$((daily_total + prev_minutes * 60 + prev_seconds))
@@ -949,6 +1112,8 @@ stop_music_timer() {
     # Add current session to daily total
     daily_total=$((daily_total + duration))
 
+    local session_minutes=$((duration / 60))
+    local session_seconds=$((duration % 60))
     local daily_minutes=$((daily_total / 60))
     local daily_seconds=$((daily_total % 60))
 
@@ -956,56 +1121,20 @@ stop_music_timer() {
     local daily_hours
     if command -v bc >/dev/null 2>&1; then
         daily_hours=$(echo "scale=2; $daily_total / 3600" | bc 2>/dev/null)
-        # Add leading zero if needed
         if [[ "$daily_hours" =~ ^\..*$ ]]; then
             daily_hours="0$daily_hours"
         fi
     else
-        # Fallback using awk if bc is not available
         daily_hours=$(awk "BEGIN {printf \"%.2f\", $daily_total / 3600}")
     fi
 
-    # Ensure we have a valid number
     if [ -z "$daily_hours" ] || [[ ! "$daily_hours" =~ ^[0-9]*\.?[0-9]+$ ]]; then
         daily_hours="0.00"
-        echo "Debug: Invalid hours calculation, using 0.00" >> /tmp/timer_debug.log
     fi
 
-    # Build the entire log entry in memory (atomic write for Dropbox)
-    local log_entry=""
-
-    # Check if we need to add a date separator
-    local last_date=""
-    if [ -f "$log_file" ] && [ -s "$log_file" ]; then
-        # Get the date from the last log entry
-        last_date=$(grep -E '^\[' "$log_file" | tail -1 | grep -o '^\[[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}' | tr -d '[')
-    fi
-
-    # Add date separator if this is a new date
-    if [ -n "$last_date" ] && [ "$last_date" != "$current_date" ]; then
-        log_entry="${log_entry}\n"
-        log_entry="${log_entry}================================\n"
-        log_entry="${log_entry}  $current_date\n"
-        log_entry="${log_entry}================================\n"
-        log_entry="${log_entry}\n"
-    fi
-
-    # Check if this is a different item from last logged
-    local last_logged_item=""
-    if [ -f "$log_file" ]; then
-        last_logged_item=$(tail -1 "$log_file" 2>/dev/null | grep -o '"[^"]*"' | head -1)
-    fi
-
-    # Add spacing if this is a different item
-    if [ -n "$last_logged_item" ] && [ "$last_logged_item" != "\"Video Game Bank\"" ]; then
-        log_entry="${log_entry}\n"
-    fi
-
-    # Add the actual log entry
-    log_entry="${log_entry}[$timestamp] \"Video Game Bank\" - Session: ${session_minutes}m ${session_seconds}s | Daily Total: ${daily_minutes}m ${daily_seconds}s (${daily_hours} hours)\n"
-
-    # Write everything in a single operation (atomic for Dropbox)
-    printf "%b" "$log_entry" >> "$log_file"
+    # Write to organized log (Date -> Space -> Task hierarchy)
+    # Video Game Bank goes under its own "Video Game Bank" space section
+    write_organized_log "Video Game Bank" "Video Game Bank" "$duration" "$daily_total" "$daily_hours"
 
     # Show confirmation
     osascript -e "display dialog \"🎵 Video Game Bank timer stopped!\n\nThis session: ${session_minutes}m ${session_seconds}s\nToday's total: ${daily_minutes}m ${daily_seconds}s\nDecimal hours: ${daily_hours}\" with title \"Timer Stopped\" buttons {\"OK\"} default button \"OK\" giving up after 5"
@@ -1205,18 +1334,18 @@ switch_space() {
     local ordered_spaces=("ALL" "Ujam" "Lonebody" "60 Pleasant" "Personal" "Workflow Tools")
     local space_options=()
 
-    # Add each space in your preferred order
+    # Add each space in your preferred order using SF Symbol icons
     for space in "${ordered_spaces[@]}"; do
+        local sf_icon=$(get_space_sf_icon "$space")
         if [ "$space" = "ALL" ]; then
             local all_count=$(cat "$TODO_DATA_FILE" | jq '[.spaces[].todos[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
-            space_options+=("📋 ALL ($all_count)")
+            space_options+=("$sf_icon ALL ($all_count)")
         else
             # Check if this space exists in the JSON
             local exists=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$space" '.spaces[$space] // empty' 2>/dev/null)
             if [ -n "$exists" ]; then
-                local color=$(cat "$TODO_DATA_FILE" | jq -r --arg space "$space" '.spaces[$space].color' 2>/dev/null || echo "📋")
                 local count=$(cat "$TODO_DATA_FILE" | jq --arg space "$space" '[.spaces[$space].todos[] | select(.completed == false)] | length' 2>/dev/null || echo "0")
-                space_options+=("$color $space ($count)")
+                space_options+=("$sf_icon $space ($count)")
             fi
         fi
     done
@@ -1238,7 +1367,7 @@ switch_space() {
         if [ "$choice" = "ALL" ]; then
             selected_space="ALL"
         else
-            # Extract space name from "emoji SPACE (count)" format
+            # Extract space name from "icon SPACE (count)" format
             selected_space=$(echo "$choice" | sed -E 's/^[^[:space:]]+ ([^(]+) \([0-9]+\)$/\1/' | sed 's/[[:space:]]*$//')
         fi
 
