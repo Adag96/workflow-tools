@@ -56,13 +56,13 @@ get_current_space_info() {
 
 # Helper function to write organized timer logs
 # Format: Date -> Space -> Task (grouped)
-# Args: $1=space_name, $2=task_name, $3=session_seconds, $4=daily_total_seconds, $5=daily_hours
+# Args: $1=space_name, $2=task_name, $3=session_seconds, $4=task_daily_total_seconds, $5=task_daily_hours
 write_organized_log() {
     local space_name="$1"
     local task_name="$2"
     local session_seconds="$3"
-    local daily_total="$4"
-    local daily_hours="$5"
+    local task_daily_total="$4"
+    local task_daily_hours="$5"
 
     local log_file="$CONFIG_DIR/todo_data/timer_log.txt"
     local current_date=$(date "+%Y-%m-%d")
@@ -70,8 +70,8 @@ write_organized_log() {
 
     local session_minutes=$((session_seconds / 60))
     local session_secs=$((session_seconds % 60))
-    local daily_minutes=$((daily_total / 60))
-    local daily_secs=$((daily_total % 60))
+    local task_daily_minutes=$((task_daily_total / 60))
+    local task_daily_secs=$((task_daily_total % 60))
 
     # Create log file if it doesn't exist
     if [ ! -f "$log_file" ]; then
@@ -88,139 +88,44 @@ write_organized_log() {
 
     if ! echo "$file_content" | grep -q "^  $current_date$"; then
         # Date section doesn't exist - append it at the end
+        # Calculate space daily total (just this session since it's the first)
+        local space_daily_total=$session_seconds
+        local space_daily_minutes=$((space_daily_total / 60))
+        local space_daily_secs=$((space_daily_total % 60))
+        local space_daily_hours
+        if command -v bc >/dev/null 2>&1; then
+            space_daily_hours=$(echo "scale=2; $space_daily_total / 3600" | bc 2>/dev/null)
+            if [[ "$space_daily_hours" =~ ^\..*$ ]]; then
+                space_daily_hours="0$space_daily_hours"
+            fi
+        else
+            space_daily_hours=$(awk "BEGIN {printf \"%.2f\", $space_daily_total / 3600}")
+        fi
         {
             echo ""
             echo "$date_header"
             echo "$date_line"
             echo "$date_header"
             echo ""
-            echo "--- $space_name ---"
+            echo "--- $space_name ---------------"
             echo "  \"$task_name\""
-            echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)"
+            echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Day: ${task_daily_minutes}m ${task_daily_secs}s"
+            echo ""
+            echo "  Daily Total: ${space_daily_minutes}m ${space_daily_secs}s (${space_daily_hours} hours)"
         } >> "$log_file"
     else
         # Date section exists - need to find the right place to insert
-        # Use awk to process and insert at the right location
-        local temp_file=$(mktemp)
+        # Strategy:
+        # 1. First pass: insert the new entry in the right place
+        # 2. Second pass: update/add the space Daily Total footer
 
-        awk -v date="$current_date" \
-            -v space="$space_name" \
-            -v task="$task_name" \
-            -v time="$current_time" \
-            -v session_min="$session_minutes" \
-            -v session_sec="$session_secs" \
-            -v daily_min="$daily_minutes" \
-            -v daily_sec="$daily_secs" \
-            -v daily_hrs="$daily_hours" '
-        BEGIN {
-            in_target_date = 0
-            found_space = 0
-            found_task = 0
-            entry_written = 0
-            date_header = "  " date
-            space_header = "--- " space " ---"
-            task_header = "  \"" task "\""
-            new_entry = "    [" time "] Session: " session_min "m " session_sec "s | Daily Total: " daily_min "m " daily_sec "s (" daily_hrs " hours)"
-        }
-
-        # Track when we enter/exit target date section
-        /^  [0-9]{4}-[0-9]{2}-[0-9]{2}$/ {
-            if ($0 == date_header) {
-                in_target_date = 1
-            } else if (in_target_date) {
-                # New date section starting, we need to write before this if not written
-                if (!entry_written) {
-                    if (!found_space) {
-                        print ""
-                        print space_header
-                        print task_header
-                        print new_entry
-                    } else if (!found_task) {
-                        print task_header
-                        print new_entry
-                    }
-                    entry_written = 1
-                }
-                in_target_date = 0
-                found_space = 0
-                found_task = 0
-            }
-        }
-
-        # Track space headers within target date
-        in_target_date && /^--- .* ---$/ {
-            if (!entry_written && found_space && !found_task) {
-                # Previous space didnt have our task, write it before this new space
-                print task_header
-                print new_entry
-                entry_written = 1
-            }
-            if ($0 == space_header) {
-                found_space = 1
-            } else {
-                found_space = 0
-            }
-            found_task = 0
-        }
-
-        # Track task headers within target space
-        in_target_date && found_space && /^  ".*"$/ {
-            if (!entry_written && found_task) {
-                # Previous task wasnt ours, we need to check if this one is
-            }
-            if ($0 == task_header) {
-                found_task = 1
-            } else if (found_task && !entry_written) {
-                # We found our task before, now seeing new task - write entry first
-                print new_entry
-                entry_written = 1
-            }
-        }
-
-        # If we see an entry line after finding our task, print the current line
-        # and mark where to append after the last entry
-        in_target_date && found_space && found_task && /^    \[/ {
-            # This is an entry under our task - remember we might need to append after
-        }
-
-        {
-            print
-            # After printing a task entry, check if we need to append
-            if (in_target_date && found_space && found_task && !entry_written && /^    \[/) {
-                # Peek ahead - if next line is not an entry, write now
-                # We cant peek in awk easily, so we use a different approach
-            }
-        }
-
-        END {
-            if (!entry_written) {
-                if (!found_space) {
-                    print ""
-                    print space_header
-                    print task_header
-                    print new_entry
-                } else if (!found_task) {
-                    print task_header
-                    print new_entry
-                } else {
-                    print new_entry
-                }
-            }
-        }
-        ' "$log_file" > "$temp_file"
-
-        # The awk approach is complex - lets use a simpler Python-like approach with bash
-        # Actually, lets rewrite this more simply
-        rm -f "$temp_file"
-
-        # Simpler approach: rebuild the relevant section
         local temp_file=$(mktemp)
         local in_date=0
         local in_space=0
         local in_task=0
         local wrote_entry=0
-        local prev_line=""
 
+        # First pass: insert the task entry
         while IFS= read -r line || [ -n "$line" ]; do
             # Check for date header
             if [[ "$line" == "  $current_date" ]]; then
@@ -232,14 +137,14 @@ write_organized_log() {
                 if [ $wrote_entry -eq 0 ]; then
                     if [ $in_space -eq 0 ]; then
                         echo "" >> "$temp_file"
-                        echo "--- $space_name ---" >> "$temp_file"
+                        echo "--- $space_name ---------------" >> "$temp_file"
                         echo "  \"$task_name\"" >> "$temp_file"
-                        echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+                        echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Day: ${task_daily_minutes}m ${task_daily_secs}s" >> "$temp_file"
                     elif [ $in_task -eq 0 ]; then
                         echo "  \"$task_name\"" >> "$temp_file"
-                        echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+                        echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Day: ${task_daily_minutes}m ${task_daily_secs}s" >> "$temp_file"
                     else
-                        echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+                        echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Day: ${task_daily_minutes}m ${task_daily_secs}s" >> "$temp_file"
                     fi
                     wrote_entry=1
                 fi
@@ -248,15 +153,15 @@ write_organized_log() {
                 in_task=0
             fi
 
-            # Check for space header within date
-            if [ $in_date -eq 1 ] && [[ "$line" == "--- $space_name ---" ]]; then
+            # Check for space header within date (match both old and new formats)
+            if [ $in_date -eq 1 ] && [[ "$line" == "--- $space_name ---------------" || "$line" == "--- $space_name ---" ]]; then
                 in_space=1
                 in_task=0
-            elif [ $in_date -eq 1 ] && [[ "$line" =~ ^---\ .*\ ---$ ]]; then
+            elif [ $in_date -eq 1 ] && [[ "$line" =~ ^---\ .* ]]; then
                 # Different space - write task before if we were in our space without finding task
                 if [ $in_space -eq 1 ] && [ $in_task -eq 0 ] && [ $wrote_entry -eq 0 ]; then
                     echo "  \"$task_name\"" >> "$temp_file"
-                    echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+                    echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Day: ${task_daily_minutes}m ${task_daily_secs}s" >> "$temp_file"
                     wrote_entry=1
                 fi
                 in_space=0
@@ -269,14 +174,23 @@ write_organized_log() {
             elif [ $in_date -eq 1 ] && [ $in_space -eq 1 ] && [[ "$line" =~ ^\ \ \" ]]; then
                 # Different task - write entry before if we were in our task
                 if [ $in_task -eq 1 ] && [ $wrote_entry -eq 0 ]; then
-                    echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+                    echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Day: ${task_daily_minutes}m ${task_daily_secs}s" >> "$temp_file"
                     wrote_entry=1
                 fi
                 in_task=0
             fi
 
+            # Skip existing Daily Total footer lines for our space (we'll recalculate)
+            # Also skip blank lines immediately before Daily Total (they get re-added in third pass)
+            if [ $in_date -eq 1 ] && [ $in_space -eq 1 ] && [[ "$line" =~ ^\ \ Daily\ Total: ]]; then
+                continue
+            fi
+            if [ $in_date -eq 1 ] && [ $in_space -eq 1 ] && [[ -z "$line" || "$line" =~ ^[[:space:]]*$ ]]; then
+                # Skip blank lines within our space section (the footer pass will add the right one)
+                continue
+            fi
+
             echo "$line" >> "$temp_file"
-            prev_line="$line"
         done < "$log_file"
 
         # Handle end of file
@@ -286,18 +200,111 @@ write_organized_log() {
                 :
             elif [ $in_space -eq 0 ]; then
                 echo "" >> "$temp_file"
-                echo "--- $space_name ---" >> "$temp_file"
+                echo "--- $space_name ---------------" >> "$temp_file"
                 echo "  \"$task_name\"" >> "$temp_file"
-                echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+                echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Day: ${task_daily_minutes}m ${task_daily_secs}s" >> "$temp_file"
             elif [ $in_task -eq 0 ]; then
                 echo "  \"$task_name\"" >> "$temp_file"
-                echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+                echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Day: ${task_daily_minutes}m ${task_daily_secs}s" >> "$temp_file"
             else
-                echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Daily Total: ${daily_minutes}m ${daily_secs}s (${daily_hours} hours)" >> "$temp_file"
+                echo "    [$current_time] Session: ${session_minutes}m ${session_secs}s | Day: ${task_daily_minutes}m ${task_daily_secs}s" >> "$temp_file"
             fi
         fi
 
         mv "$temp_file" "$log_file"
+
+        # Second pass: calculate and add/update space Daily Total footers
+        # Sum all sessions for this space on this date and add footer
+        local space_daily_total=0
+        local in_date=0
+        local in_space=0
+
+        while IFS= read -r line; do
+            if [[ "$line" == "  $current_date" ]]; then
+                in_date=1
+                in_space=0
+            elif [[ "$line" =~ ^\ \ [0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && [ $in_date -eq 1 ]; then
+                in_date=0
+                in_space=0
+            fi
+
+            if [ $in_date -eq 1 ]; then
+                if [[ "$line" == "--- $space_name ---------------" || "$line" == "--- $space_name ---" ]]; then
+                    in_space=1
+                elif [[ "$line" =~ ^---\ .* ]]; then
+                    in_space=0
+                fi
+            fi
+
+            # Sum session times within target space
+            if [ $in_date -eq 1 ] && [ $in_space -eq 1 ]; then
+                if [[ "$line" =~ Session:\ ([0-9]+)m\ ([0-9]+)s ]]; then
+                    local sess_min="${BASH_REMATCH[1]}"
+                    local sess_sec="${BASH_REMATCH[2]}"
+                    space_daily_total=$((space_daily_total + sess_min * 60 + sess_sec))
+                fi
+            fi
+        done < "$log_file"
+
+        # Calculate space daily total display values
+        local space_daily_minutes=$((space_daily_total / 60))
+        local space_daily_secs=$((space_daily_total % 60))
+        local space_daily_hours
+        if command -v bc >/dev/null 2>&1; then
+            space_daily_hours=$(echo "scale=2; $space_daily_total / 3600" | bc 2>/dev/null)
+            if [[ "$space_daily_hours" =~ ^\..*$ ]]; then
+                space_daily_hours="0$space_daily_hours"
+            fi
+        else
+            space_daily_hours=$(awk "BEGIN {printf \"%.2f\", $space_daily_total / 3600}")
+        fi
+
+        # Third pass: insert the Daily Total footer at the end of the space section
+        local temp_file2=$(mktemp)
+        local in_date=0
+        local in_space=0
+        local footer_written=0
+
+        while IFS= read -r line || [ -n "$line" ]; do
+            if [[ "$line" == "  $current_date" ]]; then
+                in_date=1
+                in_space=0
+                footer_written=0
+            elif [[ "$line" =~ ^\ \ [0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && [ $in_date -eq 1 ]; then
+                # New date starting - write footer if we were in our space
+                if [ $in_space -eq 1 ] && [ $footer_written -eq 0 ]; then
+                    echo "" >> "$temp_file2"
+                    echo "  Daily Total: ${space_daily_minutes}m ${space_daily_secs}s (${space_daily_hours} hours)" >> "$temp_file2"
+                    footer_written=1
+                fi
+                in_date=0
+                in_space=0
+            fi
+
+            if [ $in_date -eq 1 ]; then
+                if [[ "$line" == "--- $space_name ---------------" || "$line" == "--- $space_name ---" ]]; then
+                    in_space=1
+                elif [[ "$line" =~ ^---\ .* ]]; then
+                    # Different space starting - write footer before if we were in our space
+                    if [ $in_space -eq 1 ] && [ $footer_written -eq 0 ]; then
+                        echo "" >> "$temp_file2"
+                        echo "  Daily Total: ${space_daily_minutes}m ${space_daily_secs}s (${space_daily_hours} hours)" >> "$temp_file2"
+                        footer_written=1
+                    fi
+                    in_space=0
+                fi
+            fi
+
+            echo "$line" >> "$temp_file2"
+        done < "$log_file"
+
+        # Handle end of file - write footer if we're still in our space
+        if [ $in_space -eq 1 ] && [ $footer_written -eq 0 ]; then
+            echo "" >> "$temp_file2"
+            echo "  Daily Total: ${space_daily_minutes}m ${space_daily_secs}s (${space_daily_hours} hours)" >> "$temp_file2"
+        fi
+
+        mv "$temp_file2" "$log_file"
     fi
 
     sync  # Force filesystem sync for Dropbox
@@ -847,21 +854,64 @@ stop_timer() {
             '(.spaces[$space].todos[] | select(.id == $id)) |= (.timer_duration = $total | .timer_start = null)' \
             > "${TODO_DATA_FILE}.tmp" && mv "${TODO_DATA_FILE}.tmp" "$TODO_DATA_FILE"
 
-        # Calculate daily total for this task (for display and logging)
+        # Calculate daily total for this TASK on current date (task-specific, not space-wide)
         local log_file="$CONFIG_DIR/todo_data/timer_log.txt"
         local current_date=$(date "+%Y-%m-%d")
         local daily_total=0
 
         if [ -f "$log_file" ]; then
-            # Sum up all session times for this todo item on the current date (check new format)
+            # Sum up all session times for this specific TASK on the current date
+            local in_target_date=0
+            local in_target_space=0
+            local in_target_task=0
+
             while IFS= read -r line; do
+                # Check for date header
+                if [[ "$line" == "  $current_date" ]]; then
+                    in_target_date=1
+                    in_target_space=0
+                    in_target_task=0
+                elif [[ "$line" =~ ^\ \ [0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] && [ $in_target_date -eq 1 ]; then
+                    # Different date section - stop looking
+                    in_target_date=0
+                    in_target_space=0
+                    in_target_task=0
+                fi
+
+                # Check for space header within target date (match both old and new formats)
+                if [ $in_target_date -eq 1 ]; then
+                    if [[ "$line" == "--- $active_timer_space ---------------" || "$line" == "--- $active_timer_space ---" ]]; then
+                        in_target_space=1
+                        in_target_task=0
+                    elif [[ "$line" =~ ^---\ .* ]]; then
+                        # Different space
+                        in_target_space=0
+                        in_target_task=0
+                    fi
+                fi
+
+                # Check for task header within target space
+                if [ $in_target_date -eq 1 ] && [ $in_target_space -eq 1 ]; then
+                    if [[ "$line" == "  \"$active_timer_text\"" ]]; then
+                        in_target_task=1
+                    elif [[ "$line" =~ ^\ \ \" ]]; then
+                        # Different task header
+                        in_target_task=0
+                    fi
+                fi
+
                 # Match new format: lines starting with spaces and brackets under task headers
-                if [[ "$line" =~ ^\ +\[.*Session:\ ([0-9]+)m\ ([0-9]+)s ]]; then
-                    local prev_minutes="${BASH_REMATCH[1]}"
-                    local prev_seconds="${BASH_REMATCH[2]}"
-                    daily_total=$((daily_total + prev_minutes * 60 + prev_seconds))
-                # Also match old format for backwards compatibility
-                elif [[ "$line" =~ ^\[$current_date.*\].*\"$active_timer_text\".*Session:\ ([0-9]+)m\ ([0-9]+)s ]]; then
+                # Only count if we're in the target date AND target space AND target task
+                if [ $in_target_date -eq 1 ] && [ $in_target_space -eq 1 ] && [ $in_target_task -eq 1 ]; then
+                    if [[ "$line" =~ ^\ +\[.*Session:\ ([0-9]+)m\ ([0-9]+)s ]]; then
+                        local prev_minutes="${BASH_REMATCH[1]}"
+                        local prev_seconds="${BASH_REMATCH[2]}"
+                        daily_total=$((daily_total + prev_minutes * 60 + prev_seconds))
+                    fi
+                fi
+
+                # Also match old format for backwards compatibility (no space tracking)
+                if [[ "$line" =~ ^\[$current_date.*\].*\"$active_timer_text\".*Session:\ ([0-9]+)m\ ([0-9]+)s ]]; then
                     local prev_minutes="${BASH_REMATCH[1]}"
                     local prev_seconds="${BASH_REMATCH[2]}"
                     daily_total=$((daily_total + prev_minutes * 60 + prev_seconds))
