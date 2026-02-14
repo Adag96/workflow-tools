@@ -3,27 +3,32 @@
 WIDTH=100
 ICONS_VOLUME=(􀊣 􀊡 􀊥 􀊧 􀊩)
 
-volume_change() {
-  # Set icon + color depending on volume percentage
-  case $INFO in
+get_icon_for_volume() {
+  local vol=$1
+  case $vol in
   [6-9][0-9] | 100)
-    ICON=${ICONS_VOLUME[4]}
+    echo ${ICONS_VOLUME[4]}
     ;;
   [3-5][0-9])
-    ICON=${ICONS_VOLUME[3]}
+    echo ${ICONS_VOLUME[3]}
     ;;
   [1-2][0-9])
-    ICON=${ICONS_VOLUME[2]}
+    echo ${ICONS_VOLUME[2]}
     ;;
   [1-9])
-    ICON=${ICONS_VOLUME[1]}
+    echo ${ICONS_VOLUME[1]}
     ;;
   0)
-    ICON=${ICONS_VOLUME[0]}
+    echo ${ICONS_VOLUME[0]}
     ;;
-  *) ICON=${ICONS_VOLUME[4]} ;;
+  *)
+    echo ${ICONS_VOLUME[4]}
+    ;;
   esac
+}
 
+volume_change() {
+  ICON=$(get_icon_for_volume "$INFO")
   sketchybar --set volume_icon icon=$ICON
 
   sketchybar --set volume slider.percentage=$INFO \
@@ -36,6 +41,21 @@ volume_change() {
   if [ "$FINAL_PERCENTAGE" -eq "$INFO" ]; then
     sketchybar --animate tanh 30 --set volume slider.width=0
   fi
+}
+
+# Routine update: poll actual system volume to catch changes from SoundSource etc.
+routine_update() {
+  VOLUME=$(osascript -e 'output volume of (get volume settings)' 2>/dev/null)
+  MUTED=$(osascript -e 'output muted of (get volume settings)' 2>/dev/null)
+
+  # Handle muted state
+  if [ "$MUTED" = "true" ]; then
+    VOLUME=0
+  fi
+
+  # Only update icon (don't show slider on routine updates)
+  ICON=$(get_icon_for_volume "$VOLUME")
+  sketchybar --set volume_icon icon=$ICON
 }
 
 mouse_clicked() {
@@ -53,6 +73,9 @@ mouse_exited() {
 case "$SENDER" in
 "volume_change")
   volume_change
+  ;;
+"routine")
+  routine_update
   ;;
 "mouse.clicked")
   mouse_clicked

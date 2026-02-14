@@ -26,6 +26,7 @@ sketchybar --add slider volume right \
              label.drawing=off \
              click_script="$PLUGIN_DIR/volume_click.sh" \
              script="$PLUGIN_DIR/volume.sh" \
+             update_freq=10 \
              padding_left=5 \
              padding_right=3 \
            --subscribe volume_icon volume_change
