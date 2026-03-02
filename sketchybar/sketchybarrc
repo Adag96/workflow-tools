@@ -239,51 +239,8 @@ else
   sketchybar --set yabai.toggle icon="$YABAI_STOPPED_ICON" icon.color=0xFFE06C75
 fi
 
-# Add separate left and right background pills
-# Left pill: spaces, front app, and yabai controls (PILL LEVEL 1)
-sketchybar --add bracket left_bracket space.1 space_icons.1 space.2 space_icons.2 space.3 space_icons.3 space.4 space_icons.4 space_separator front_app ableton_timer_toggle yabai_mode yabai.toggle \
-           --set left_bracket background.color=$PILL_COLOR_1 \
-                              background.height=$HEIGHT_L2 \
-                              background.corner_radius=$RADIUS_L1 \
-                              border_color=$PILL_LEVEL_2_BORDER \
-                              border_width=$BORDER_THIN \
-                              y_offset=$Y_OFFSET
-
-# Spaces container pill (PILL LEVEL 2) - contains spaces 1-4 and their icons
-sketchybar --add bracket spaces_bracket space.1 space_icons.1 space.2 space_icons.2 space.3 space_icons.3 space.4 space_icons.4 \
-           --set spaces_bracket background.color=$PILL_COLOR_2 \
-                               background.height=$HEIGHT_L3 \
-                               background.corner_radius=$RADIUS_L2 \
-                               border_color=$PILL_LEVEL_2_BORDER \
-                               border_width=$BORDER_THICK \
-                               padding_left=$PADDING_L \
-                               padding_right=$PADDING_M \
-                               y_offset=$Y_OFFSET
-
-# Individual space + icons pills (PILL LEVEL 3) - concentric within spaces container
-sketchybar --add bracket space_1_bracket space.1 space_icons.1 \
-           --set space_1_bracket background.color=$PILL_COLOR_3 \
-                                background.height=$HEIGHT_L4 \
-                                background.corner_radius=$RADIUS_L3 \
-                                y_offset=$Y_OFFSET
-
-sketchybar --add bracket space_2_bracket space.2 space_icons.2 \
-           --set space_2_bracket background.color=$PILL_COLOR_3 \
-                                background.height=$HEIGHT_L4 \
-                                background.corner_radius=$RADIUS_L3 \
-                                y_offset=$Y_OFFSET
-
-sketchybar --add bracket space_3_bracket space.3 space_icons.3 \
-           --set space_3_bracket background.color=$PILL_COLOR_3 \
-                                background.height=$HEIGHT_L4 \
-                                background.corner_radius=$RADIUS_L3 \
-                                y_offset=$Y_OFFSET
-
-sketchybar --add bracket space_4_bracket space.4 space_icons.4 \
-           --set space_4_bracket background.color=$PILL_COLOR_3 \
-                                background.height=$HEIGHT_L4 \
-                                background.corner_radius=$RADIUS_L3 \
-                                y_offset=$Y_OFFSET
+# Dynamic space brackets (handles any number of spaces across displays)
+source $ITEM_DIR/space_brackets.sh
 
 # Front app container pill (PILL LEVEL 2) - separate from spaces
 sketchybar --add bracket front_app_bracket front_app \

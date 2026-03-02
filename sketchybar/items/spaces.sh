@@ -1,26 +1,57 @@
 #!/bin/bash
 
-# Hard-coded to only support 4 spaces maximum
-SPACE_SIDS=(1 2 3 4)
+# Dynamic space detection - queries yabai for all spaces and their displays
+# Each space item is assigned to its respective display via associated_display
 
-for sid in "${SPACE_SIDS[@]}"
-do
-   # Create the space number item
-   sketchybar --add space space.$sid left \
-              --set space.$sid space=$sid \
-                               icon=$sid \
-                               label.drawing=off \
-                               script="$PLUGIN_DIR/space.sh"
-   
-   # Create a separate item for space icons
-   sketchybar --add item space_icons.$sid left \
-              --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_MEDIUM.0" \
-                                    label.padding_right=$PADDING_M \
-                                    label.padding_left=$PADDING_M \
-                                    label.y_offset=-1 \
-                                    background.drawing=off \
-                                    icon.drawing=off
-done
+# Get all spaces from yabai
+SPACES_JSON=$(yabai -m query --spaces 2>/dev/null)
+
+if [ -z "$SPACES_JSON" ] || [ "$SPACES_JSON" = "null" ]; then
+    # Fallback to static spaces if yabai isn't running
+    SPACE_SIDS=(1 2 3 4)
+    for sid in "${SPACE_SIDS[@]}"; do
+        sketchybar --add space space.$sid left \
+                   --set space.$sid space=$sid \
+                                    icon=$sid \
+                                    label.drawing=off \
+                                    script="$PLUGIN_DIR/space.sh"
+
+        sketchybar --add item space_icons.$sid left \
+                   --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_MEDIUM.0" \
+                                         label.padding_right=$PADDING_M \
+                                         label.padding_left=$PADDING_M \
+                                         label.y_offset=-1 \
+                                         background.drawing=off \
+                                         icon.drawing=off
+    done
+else
+    # Parse spaces from yabai - get index and display for each
+    SPACE_COUNT=$(echo "$SPACES_JSON" | jq 'length')
+
+    for ((i=0; i<SPACE_COUNT; i++)); do
+        sid=$(echo "$SPACES_JSON" | jq -r ".[$i].index")
+        display_id=$(echo "$SPACES_JSON" | jq -r ".[$i].display")
+
+        # Create the space number item with display association
+        sketchybar --add space space.$sid left \
+                   --set space.$sid space=$sid \
+                                    icon=$sid \
+                                    label.drawing=off \
+                                    associated_display=$display_id \
+                                    script="$PLUGIN_DIR/space.sh" \
+                   --subscribe space.$sid display_change space_change
+
+        # Create a separate item for space icons with same display association
+        sketchybar --add item space_icons.$sid left \
+                   --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_MEDIUM.0" \
+                                         label.padding_right=$PADDING_M \
+                                         label.padding_left=$PADDING_M \
+                                         label.y_offset=-1 \
+                                         background.drawing=off \
+                                         icon.drawing=off \
+                                         associated_display=$display_id
+    done
+fi
 
 sketchybar --add item space_separator left \
           --set space_separator icon=">" \
