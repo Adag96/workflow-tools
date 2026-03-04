@@ -1,34 +1,40 @@
 # bsp, stack or float
-Yabai -m config layout bsp
+yabai -m config layout bsp
 
-Yabai -m config window_placement second_child
+yabai -m config window_placement second_child
 
 # Line from a user's plug-in for sketchy bar, to link them I guess
 yabai -m signal --add event=window_focused action="sketchybar -m --trigger window_focus &> /dev/null"
 
 # padding
-Yabai -m config top_padding 0
-Yabai -m config bottom_padding 5
-Yabai -m config left_padding 5
-Yabai -m config right_padding 5
-Yabai -m config window_gap 5
+yabai -m config top_padding 0
+yabai -m config bottom_padding 5
+yabai -m config left_padding 5
+yabai -m config right_padding 5
+yabai -m config window_gap 5
 
 # mouse settings
+yabai -m config mouse_follows_focus off
 
-Yabai -m config mouse_follows_focus off
-
-Yabai -m config mouse_modifier alt
+yabai -m config mouse_modifier alt
 # left click + drag
-Yabai -m config mouse_action1 move
-# richt click + drag
-Yabai -m config mouse_action2 resize
+yabai -m config mouse_action1 move
+# right click + drag
+yabai -m config mouse_action2 resize
 
-Yabai -m mouse_drop_action swap
+yabai -m mouse_drop_action swap
 
 # Disable specific apps
-Yabai -m rule --add app='^System Settings$' manage=off
-Yabai -m rule --add app='^Calculator$' manage=off
+yabai -m rule --add app='^System Settings$' manage=off
+yabai -m rule --add app='^Calculator$' manage=off
 yabai -m signal --add event=window_created app="^Blitzit$" action='yabai -m window $YABAI_WINDOW_ID --toggle float'
 
 # Tell Yabai about SketchyBar to correct height
-Yabai -m config external_bar all:44:0
+yabai -m config external_bar all:44:0
+
+# Fix Tahoe race condition - refresh spaces when display changes or on startup
+yabai -m signal --add event=display_added action="sleep 1 && yabai -m space --balance"
+yabai -m signal --add event=display_resized action="sleep 0.5 && yabai -m space --balance"
+
+# Workaround for Tahoe: reapply padding after brief delay to catch late-loading bars
+(sleep 2 && yabai -m config external_bar all:44:0) &
