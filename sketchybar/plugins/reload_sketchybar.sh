@@ -22,3 +22,4 @@ sketchybar -m --set reload.bar \
               icon.color=$ICON_COLOR
 
 sketchybar --reload
+yabai --restart-service
