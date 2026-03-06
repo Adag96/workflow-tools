@@ -1,3 +1,6 @@
+yabai -m signal --add event=dock_did_restart action="sudo yabai --load-sa"
+  sudo yabai --load-sa
+
 # bsp, stack or float
 yabai -m config layout bsp
 
@@ -22,19 +25,21 @@ yabai -m config mouse_action1 move
 # right click + drag
 yabai -m config mouse_action2 resize
 
-yabai -m mouse_drop_action swap
+yabai -m config mouse_drop_action swap
 
 # Disable specific apps
 yabai -m rule --add app='^System Settings$' manage=off
 yabai -m rule --add app='^Calculator$' manage=off
 yabai -m signal --add event=window_created app="^Blitzit$" action='yabai -m window $YABAI_WINDOW_ID --toggle float'
 
-# Tell Yabai about SketchyBar to correct height
+# Tell Yabai about SketchyBar (44px top bar)
 yabai -m config external_bar all:44:0
 
-# Fix Tahoe race condition - refresh spaces when display changes or on startup
-yabai -m signal --add event=display_added action="sleep 1 && yabai -m space --balance"
-yabai -m signal --add event=display_resized action="sleep 0.5 && yabai -m space --balance"
+# Multi-monitor stability signals
+yabai -m signal --add event=display_added action="yabai -m space --balance"
+yabai -m signal --add event=display_removed action="yabai -m space --balance"
+yabai -m signal --add event=display_changed action="yabai -m space --balance"
+yabai -m signal --add event=system_woke action="yabai -m space --balance"
 
-# Workaround for Tahoe: reapply padding after brief delay to catch late-loading bars
-(sleep 2 && yabai -m config external_bar all:44:0) &
+# Fix windows after Mission Control operations (workaround without SA)
+yabai -m signal --add event=space_changed action="yabai -m space --balance"
