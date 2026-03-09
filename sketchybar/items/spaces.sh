@@ -3,8 +3,19 @@
 # Dynamic space detection - queries yabai for all spaces and their displays
 # Each space item is assigned to its respective display via associated_display
 
-# Get all spaces from yabai
-SPACES_JSON=$(yabai -m query --spaces 2>/dev/null)
+# Get all spaces from yabai, retrying if external display isn't detected yet
+SPACES_JSON=""
+for attempt in 1 2 3; do
+    SPACES_JSON=$(yabai -m query --spaces 2>/dev/null)
+    if [ -n "$SPACES_JSON" ] && [ "$SPACES_JSON" != "null" ]; then
+        # Check if all spaces are on display 1 (external display not recognized yet)
+        DISPLAY_COUNT=$(echo "$SPACES_JSON" | jq '[.[].display] | unique | length')
+        if [ "$DISPLAY_COUNT" -gt 1 ] || [ "$attempt" -eq 3 ]; then
+            break
+        fi
+    fi
+    sleep 1
+done
 
 if [ -z "$SPACES_JSON" ] || [ "$SPACES_JSON" = "null" ]; then
     # Fallback to static spaces if yabai isn't running
@@ -61,4 +72,4 @@ sketchybar --add item space_separator left \
                                label.drawing=off \
                                background.drawing=off \
                                script="$PLUGIN_DIR/space_windows.sh" \
-          --subscribe space_separator space_windows_change
+          --subscribe space_separator space_windows_change display_change

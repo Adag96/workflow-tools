@@ -11,6 +11,7 @@ sketchybar --add item front_app left \
                                 label.font="$TEXT_FONT:Bold:$FONT_SIZE_MEDIUM.0"\
                                 label.color=$LEFT_TEXT_COLOR \
                                 padding_right=$PADDING_M \
+                                associated_display=active \
                                 update_freq=1 \
                                 script="$PLUGIN_DIR/front_app.sh" \
            --subscribe front_app front_app_switched

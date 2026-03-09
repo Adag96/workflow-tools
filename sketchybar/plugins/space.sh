@@ -13,6 +13,15 @@ source "$HOME/.config/sketchybar/items/scheme.sh"
 current_scheme=$(cat "$COLOR_SCHEME_CACHE")
 get_colors "$current_scheme"
 
+# On display_change, refresh display association for this space and its icons
+if [ "$SENDER" = "display_change" ]; then
+    SPACE_DISPLAY=$(yabai -m query --spaces --space $SID 2>/dev/null | jq -r '.display // empty')
+    if [ -n "$SPACE_DISPLAY" ]; then
+        sketchybar --set $NAME associated_display=$SPACE_DISPLAY \
+                   --set space_icons.$SID associated_display=$SPACE_DISPLAY
+    fi
+fi
+
 # Check if the space has any windows
 WINDOWS_COUNT=$(yabai -m query --spaces --space $SID | jq '.windows | length')
 
