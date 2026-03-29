@@ -11,16 +11,22 @@ from collections import defaultdict
 CONFIG_FILE = os.path.expanduser('~/.big_clean_threshold')
 MOLE_PATH = '/usr/local/bin/mo'
 
-# ANSI Color Codes
-TEAL = '\033[36m'
-PINK = '\033[38;5;198m'
-GREY = '\033[90m'
-YELLOW = '\033[93m'
-RED = '\033[91m'
+# ANSI Color Codes (matching Mole's style)
+GREEN = '\033[0;32m'
+BLUE = '\033[1;34m'
+CYAN = '\033[0;36m'
+YELLOW = '\033[0;33m'
+PURPLE = '\033[0;35m'
+RED = '\033[0;31m'
+GRAY = '\033[0;90m'
+NC = '\033[0m'
 BOLD = '\033[1m'
-ENDC = '\033[0m'
-PURPLE = '\033[35m'
-BLUE = '\033[94m'
+
+# Legacy aliases
+TEAL = CYAN
+PINK = CYAN
+GREY = GRAY
+ENDC = NC
 
 THRESHOLD_MB = 300
 REPEAT_MIN_MB = 50
@@ -53,24 +59,24 @@ def getch():
 
 def print_main_header():
     os.system('clear')
-    print(fr"""{TEAL}{BOLD}
-  ______    ______ _____ _____ __  __    ____ _     _____     _     _   _ 
+    print(fr"""{GREEN}
+  ______    ______ _____ _____ __  __    ____ _     _____     _     _   _
  / ___ \ \ / / ___|_   _| ____|  \/  |  / ___| |   | ____|   / \   | \ | |
  \___ \ \ V /\___ \ | | |  _| | |\/| | | |   | |   |  _|    / _ \  |  \| |
   ___) | | |  ___) || | | |___| |  | | | |___| |___| |___  / ___ \ | |\  |
  |____/  |_| |____/ |_| |_____|_|  |_|  \____|_____|_____/_/    \_\|_| \_|
-    {ENDC}""")
+{NC}""")
 
 def print_big_clean_header():
     os.system('clear')
-    print(fr"""{TEAL}{BOLD}
-  ____  ___ ____     ____ _     _____     _      _   _ 
- | __ )|_ _/ ___|  /  ___| |   | ____|   / \    | \ | |
+    print(fr"""{GREEN}
+  ____  ___ ____     ____ _     _____     _      _   _
+ | __ )|_ _/ ___|   / ___| |   | ____|   / \    | \ | |
  |  _ \ | | |  _   | |   | |   |  _|    / _ \   |  \| |
  | |_) || | |_| |  | |___| |___| |___  / ___ \  | |\  |
- |____/|___\____|   \____|_____|_____ /_/    \_\|_| \_|
-    {ENDC}{BLUE}Deep system scan for oversized files.{ENDC}
-    """)
+ |____/|___\____|   \____|_____|_____/_/    \_\|_| \_|
+{NC}         {GREEN}Find and remove oversized files.{NC}
+""")
 
 def format_size(size_bytes):
     if size_bytes == 0: return "0 B"
@@ -107,6 +113,11 @@ def find_files(directories, threshold_mb):
         for i, f in enumerate(group): f['type'] = 'REPEAT'; f['group_newest'] = (i == 0); final_list.append(f)
     return final_list
 
+def show_menu_option(number, name, description, selected):
+    pointer = f"{CYAN}➤ " if selected else "  "
+    color = CYAN if selected else NC
+    print(f"{pointer}{color}{number}. {name:<14}{NC} {description}")
+
 def results_view(files):
     if not files: print(f"\n✔ No issues found."); getch(); return
     idx, total_saved = 0, 0
@@ -128,28 +139,32 @@ def results_view(files):
         elif key.lower() == 'q': return
         elif key.lower() == 'o': os.system(f'open -R "{files[idx]["path"]}"')
         elif key.lower() == 'd':
+            print(f"\n{YELLOW}Delete this file? (y/n){NC} ", end='', flush=True)
             if getch().lower() == 'y':
                 try: os.remove(files[idx]['path']); total_saved += files[idx]['size']; files.pop(idx); idx = min(idx, len(files)-1)
                 except: pass
 
 def big_clean_submenu():
     global THRESHOLD_MB
-    idx, options = 0, ["Quick Scan", "Current Dir", "Deep Scan", f"Threshold ({THRESHOLD_MB} MB)"]
+    idx = 0
     while True:
-        options[3] = f"Threshold ({THRESHOLD_MB} MB)"
+        options = [
+            ("Quick Scan", "Downloads, Movies, Desktop"),
+            ("Current Dir", "Scan current working directory"),
+            ("Deep Scan", "Full home directory scan"),
+            ("Threshold", f"Set minimum size ({THRESHOLD_MB} MB)"),
+        ]
         print_big_clean_header()
-        for i, opt in enumerate(options):
-            pointer = f"{PINK}➤ {ENDC}" if i == idx else "  "
-            color = PINK if i == idx else ENDC
-            print(f"{pointer}{color}{i+1}. {opt}{ENDC}")
-        print(f"\n{GREY}↑ ↓   |   Enter Select   |   Q Back{ENDC}")
+        for i, (name, desc) in enumerate(options):
+            show_menu_option(i + 1, name, desc, i == idx)
+        print(f"\n{GRAY}↑↓   |   Enter   |   Q Back{NC}")
         key = getch()
         if key == '\x1b[A': idx = (idx - 1) % len(options)
         elif key == '\x1b[B': idx = (idx + 1) % len(options)
         elif key.lower() == 'q': return
         elif key in ('\r', '\n'):
             if idx == 3:
-                print_big_clean_header(); sys.stdout.write(f"{YELLOW}New threshold (MB): {ENDC}"); sys.stdout.flush()
+                print_big_clean_header(); sys.stdout.write(f"{YELLOW}New threshold (MB): {NC}"); sys.stdout.flush()
                 termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, termios.tcgetattr(sys.stdin.fileno()))
                 try: line = sys.stdin.readline(); THRESHOLD_MB = int(line.strip()); save_config()
                 except: pass
@@ -158,14 +173,16 @@ def big_clean_submenu():
 
 def main():
     load_config()
-    idx, options = 0, ["Mole (System Cleanup)", "Big Clean (Oversized Files)"]
+    options = [
+        ("Mole", "Automatic system cleanup"),
+        ("Big Clean", "Find and remove oversized files"),
+    ]
+    idx = 0
     while True:
         print_main_header()
-        for i, opt in enumerate(options):
-            pointer = f"{PINK}➤ {ENDC}" if i == idx else "  "
-            color = PINK if i == idx else ENDC
-            print(f"{pointer}{color}{i+1}. {opt}{ENDC}")
-        print(f"\n{GREY}↑ ↓   |   Enter Select   |   Q Quit{ENDC}")
+        for i, (name, desc) in enumerate(options):
+            show_menu_option(i + 1, name, desc, i == idx)
+        print(f"\n{GRAY}↑↓   |   Enter   |   Q Quit{NC}")
         key = getch()
         if key == '\x1b[A': idx = (idx - 1) % len(options)
         elif key == '\x1b[B': idx = (idx + 1) % len(options)
