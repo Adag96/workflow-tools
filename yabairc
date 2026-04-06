@@ -35,11 +35,10 @@ yabai -m signal --add event=window_created app="^Blitzit$" action='yabai -m wind
 # Tell Yabai about SketchyBar (44px top bar)
 yabai -m config external_bar all:44:0
 
-# Multi-monitor stability signals
-yabai -m signal --add event=display_added action="yabai -m space --balance"
-yabai -m signal --add event=display_removed action="yabai -m space --balance"
-yabai -m signal --add event=display_changed action="yabai -m space --balance"
-yabai -m signal --add event=system_woke action="yabai -m space --balance"
+# Multi-monitor space management
+yabai -m signal --add event=display_added action="$HOME/workflow-tools/sketchybar/plugins/display_watcher.sh &"
+yabai -m signal --add event=display_removed action="$HOME/workflow-tools/sketchybar/plugins/display_watcher.sh &"
+yabai -m signal --add event=system_woke action="$HOME/workflow-tools/sketchybar/plugins/display_watcher.sh &"
 
 # Fix windows after Mission Control operations (workaround without SA)
 yabai -m signal --add event=space_changed action="yabai -m space --balance"
