@@ -23,3 +23,16 @@ sketchybar -m --set reload.bar \
 
 sketchybar --reload
 yabai --restart-service
+
+# Wait for yabai to be ready, then fix display/space layout
+(
+    for attempt in 1 2 3 4 5 6 7 8 9 10; do
+        if yabai -m query --displays &>/dev/null; then
+            # Clear cooldown so display watcher runs fresh
+            rm -f /tmp/display_watcher.last_run
+            "$HOME/workflow-tools/sketchybar/plugins/display_watcher.sh"
+            break
+        fi
+        sleep 1
+    done
+) &

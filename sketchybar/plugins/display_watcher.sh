@@ -12,8 +12,21 @@
 
 LOG_FILE="/tmp/display_watcher.log"
 LOCK_DIR="/tmp/display_watcher.lock"
+COOLDOWN_FILE="/tmp/display_watcher.last_run"
+COOLDOWN_SECONDS=10
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S'): $1" >> "$LOG_FILE"; }
+
+# --- Cooldown: skip if we completed a run recently ---
+if [ -f "$COOLDOWN_FILE" ]; then
+    last_run=$(cat "$COOLDOWN_FILE" 2>/dev/null)
+    now=$(date +%s)
+    elapsed=$((now - last_run))
+    if [ "$elapsed" -lt "$COOLDOWN_SECONDS" ]; then
+        log "Skipping — cooldown active (${elapsed}s since last run)"
+        exit 0
+    fi
+fi
 
 # --- Concurrency lock (mkdir-based, macOS has no flock) ---
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -122,5 +135,8 @@ yabai -m space --balance 2>/dev/null
 
 # Reload sketchybar so space items update
 sketchybar --reload &
+
+# Stamp cooldown so rapid re-triggers are suppressed
+date +%s > "$COOLDOWN_FILE"
 
 log "Display watcher complete"
