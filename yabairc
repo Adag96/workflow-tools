@@ -32,6 +32,10 @@ yabai -m rule --add app='^System Settings$' manage=off
 yabai -m rule --add app='^Calculator$' manage=off
 yabai -m signal --add event=window_created app="^Blitzit$" action='yabai -m window $YABAI_WINDOW_ID --toggle float'
 
+# Force-manage apps with non-standard accessibility roles
+yabai -m rule --add app="^Adobe Premiere" manage=on
+yabai -m rule --apply app="^Adobe Premiere" manage=on
+
 # Tell Yabai about SketchyBar (44px top bar)
 yabai -m config external_bar all:44:0
 
