@@ -7,7 +7,7 @@
 ### Reload Commands
 ```bash
 sketchybar --reload          # Reload sketchybar config
-brew services restart yabai  # Restart yabai
+yabai --restart-service      # Restart yabai
 ```
 
 ### Debug Logs

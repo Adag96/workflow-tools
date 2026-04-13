@@ -43,6 +43,3 @@ yabai -m config external_bar all:44:0
 yabai -m signal --add event=display_added action="$HOME/workflow-tools/sketchybar/plugins/display_watcher.sh &"
 yabai -m signal --add event=display_removed action="$HOME/workflow-tools/sketchybar/plugins/display_watcher.sh &"
 yabai -m signal --add event=system_woke action="$HOME/workflow-tools/sketchybar/plugins/display_watcher.sh &"
-
-# Fix windows after Mission Control operations (workaround without SA)
-yabai -m signal --add event=space_changed action="yabai -m space --balance"
