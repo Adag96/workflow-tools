@@ -9,6 +9,9 @@ yabai -m config window_placement second_child
 # Line from a user's plug-in for sketchy bar, to link them I guess
 yabai -m signal --add event=window_focused action="sketchybar -m --trigger window_focus &> /dev/null"
 
+# Ensure focused windows are raised to the front (fixes dock click not bringing apps forward)
+yabai -m signal --add event=window_focused action="yabai -m window \$YABAI_WINDOW_ID --sub-layer normal"
+
 # padding
 yabai -m config top_padding 0
 yabai -m config bottom_padding 5
