@@ -422,42 +422,51 @@ def run_git_action(repo_path, args, label):
 
 
 def action_resolve(full_path, display_path):
-    """Pull -> stage all -> prompt for commit message -> commit -> push."""
+    """Dynamically sync repo: detects state and only does what's needed."""
     print(f"\n  {BOLD}Resolving {display_path}...{NC}\n")
 
-    # 1. Pull
-    if not run_git_action(full_path, ['pull'], 'pull'):
-        print(f"\n  {RED}Pull failed. Resolve conflicts before continuing.{NC}")
-        print(f"\n{GRAY}Press any key to go back...{NC}")
-        getch()
-        return
-
-    # 2. Stage all
-    run_git_action(full_path, ['add', '-A'], 'stage all')
-
-    # 3. Check if there's anything to commit
+    # Detect current state
     status_output = git_cmd(full_path, ['status', '--porcelain'])
-    if not status_output.strip():
-        print(f"\n  {GRAY}Nothing to commit.{NC}")
+    has_local_changes = bool(status_output.strip())
+
+    rev_list = git_cmd(full_path, ['rev-list', '--count', '@{u}..HEAD'])
+    has_unpushed = int(rev_list.strip()) > 0 if rev_list.strip().isdigit() else False
+
+    if not has_local_changes and not has_unpushed:
+        print(f"  {GRAY}Already clean — nothing to resolve.{NC}")
         print(f"\n{GRAY}Press any key to go back...{NC}")
         getch()
         return
 
-    # 4. Commit message
-    msg = prompt_input('Commit message:')
-    if not msg:
-        print(f"  {GRAY}Aborted (no message).{NC}")
-        print(f"\n{GRAY}Press any key to go back...{NC}")
-        getch()
-        return
+    # If there are local changes, pull + stage + commit first
+    if has_local_changes:
+        # Pull
+        if not run_git_action(full_path, ['pull'], 'pull'):
+            print(f"\n  {RED}Pull failed. Resolve conflicts before continuing.{NC}")
+            print(f"\n{GRAY}Press any key to go back...{NC}")
+            getch()
+            return
 
-    # 5. Commit
-    if not run_git_action(full_path, ['commit', '-m', msg], 'commit'):
-        print(f"\n{GRAY}Press any key to go back...{NC}")
-        getch()
-        return
+        # Stage all
+        run_git_action(full_path, ['add', '-A'], 'stage all')
 
-    # 6. Push
+        # Re-check after staging (in case changes were only untracked gitignored files)
+        status_after = git_cmd(full_path, ['status', '--porcelain'])
+        if status_after.strip():
+            # Commit message
+            msg = prompt_input('Commit message:')
+            if not msg:
+                print(f"  {GRAY}Aborted (no message).{NC}")
+                print(f"\n{GRAY}Press any key to go back...{NC}")
+                getch()
+                return
+
+            if not run_git_action(full_path, ['commit', '-m', msg], 'commit'):
+                print(f"\n{GRAY}Press any key to go back...{NC}")
+                getch()
+                return
+
+    # Push (covers both new commits and previously unpushed commits)
     run_git_action(full_path, ['push'], 'push')
 
     print(f"\n  {GREEN}{BOLD}Done.{NC}")
