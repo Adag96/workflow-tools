@@ -48,7 +48,7 @@ def print_header():
 
 
 def load_repos():
-    """Load repos as list of (path, alias) tuples. Config format: path|alias (alias optional)."""
+    """Load repos as list of (path, alias, group) tuples. Config format: path|alias|group (alias/group optional)."""
     if not os.path.exists(CONFIG_FILE):
         return []
     entries = []
@@ -57,19 +57,21 @@ def load_repos():
             line = line.strip()
             if not line or line.startswith('#'):
                 continue
-            if '|' in line:
-                path, alias = line.split('|', 1)
-                entries.append((path.strip(), alias.strip()))
-            else:
-                entries.append((line, ''))
+            parts = line.split('|')
+            path = parts[0].strip()
+            alias = parts[1].strip() if len(parts) > 1 else ''
+            group = parts[2].strip() if len(parts) > 2 else ''
+            entries.append((path, alias, group))
     return entries
 
 
 def save_repos(repos):
-    """Save list of (path, alias) tuples."""
+    """Save list of (path, alias, group) tuples."""
     with open(CONFIG_FILE, 'w') as f:
-        for path, alias in repos:
-            if alias:
+        for path, alias, group in repos:
+            if group:
+                f.write(f"{path}|{alias}|{group}\n")
+            elif alias:
                 f.write(f"{path}|{alias}\n")
             else:
                 f.write(f"{path}\n")
@@ -93,7 +95,7 @@ def git_cmd(repo_path, args):
         return ''
 
 
-def get_repo_status(repo_path, alias=''):
+def get_repo_status(repo_path, alias='', group=''):
     path = os.path.expanduser(repo_path)
     if not os.path.isdir(os.path.join(path, '.git')):
         return None
@@ -121,6 +123,7 @@ def get_repo_status(repo_path, alias=''):
     return {
         'path': repo_path,
         'alias': alias,
+        'group': group,
         'display': get_display_name(repo_path, alias),
         'branch': branch,
         'staged': staged,
@@ -223,7 +226,7 @@ def compute_col_widths(statuses):
 def fetch_all(repos):
     print_header()
     print(f"\n{BLUE}Fetching all repos...{NC}\n")
-    for repo_path, alias in repos:
+    for repo_path, alias, _group in repos:
         path = os.path.expanduser(repo_path)
         display = get_display_name(repo_path, alias)
         if os.path.isdir(os.path.join(path, '.git')):
@@ -245,7 +248,7 @@ def fetch_all(repos):
 def pull_all(repos):
     print_header()
     print(f"\n{BLUE}Pulling all repos...{NC}\n")
-    for repo_path, alias in repos:
+    for repo_path, alias, _group in repos:
         path = os.path.expanduser(repo_path)
         display = get_display_name(repo_path, alias)
         if os.path.isdir(os.path.join(path, '.git')):
@@ -283,13 +286,14 @@ def manage_repos_menu():
     while True:
         print_header()
         options = []
-        for repo_path, alias in repos:
+        for repo_path, alias, group in repos:
             display = get_display_name(repo_path, alias)
             short_path = repo_path.replace(os.path.expanduser('~'), '~')
+            group_tag = f"  {PURPLE}[{group}]{NC}" if group else ""
             if alias:
-                label = f"{display}  {GRAY}{short_path}{NC}"
+                label = f"{display}  {GRAY}{short_path}{NC}{group_tag}"
             else:
-                label = display
+                label = f"{display}{group_tag}"
             options.append(('repo', label, repo_path))
         options.append(('add', f'{BOLD}Add repo path...{NC}', None))
         options.append(('discover', f'{BOLD}Auto-discover repos in ~/Developer{NC}', None))
@@ -301,7 +305,7 @@ def manage_repos_menu():
             end = NC if color else ''
             print(f"{pointer}{color}{label}{end}")
 
-        print(f"\n{GRAY}↑↓   |   N rename   |   D remove   |   Q Back{NC}")
+        print(f"\n{GRAY}↑↓   |   N rename   |   G group   |   D remove   |   Q Back{NC}")
 
         key = getch()
         if key == '\x1b[A':
@@ -319,8 +323,17 @@ def manage_repos_menu():
             hint = f" (current: {current_alias})" if current_alias else ""
             new_alias = prompt_input(f"Alias{hint}:")
             if new_alias:
-                repos[idx] = (repos[idx][0], new_alias)
+                repos[idx] = (repos[idx][0], new_alias, repos[idx][2])
                 save_repos(repos)
+        elif key.lower() == 'g' and idx < len(repos):
+            existing_groups = sorted(set(g for _, _, g in repos if g))
+            if existing_groups:
+                print(f"\n  {BOLD}Existing groups:{NC} {', '.join(existing_groups)}")
+            current_group = repos[idx][2]
+            hint = f" (current: {current_group})" if current_group else ""
+            new_group = prompt_input(f"Group{hint} (empty to clear):")
+            repos[idx] = (repos[idx][0], repos[idx][1], new_group)
+            save_repos(repos)
         elif key in ('\r', '\n'):
             action = options[idx][0]
             if action == 'add':
@@ -329,17 +342,18 @@ def manage_repos_menu():
                 if path:
                     path = os.path.expanduser(path)
                     if os.path.isdir(os.path.join(path, '.git')):
-                        existing_paths = [p for p, _ in repos]
+                        existing_paths = [p for p, _, _ in repos]
                         if path not in existing_paths:
                             alias = prompt_input("Alias (optional):")
-                            repos.append((path, alias))
+                            group = prompt_input("Group (optional):")
+                            repos.append((path, alias, group))
                             save_repos(repos)
                     else:
                         print(f"  {RED}Not a git repository.{NC}")
                         getch()
             elif action == 'discover':
                 found = discover_repos()
-                existing = set(os.path.expanduser(p) for p, _ in repos)
+                existing = set(os.path.expanduser(p) for p, _, _ in repos)
                 new_repos = [r for r in found if r not in existing]
                 if not new_repos:
                     print(f"\n  {GRAY}No new repos found.{NC}")
@@ -367,7 +381,7 @@ def manage_repos_menu():
                         elif dk in ('\r', '\n'):
                             for i, r in enumerate(new_repos):
                                 if sel[i]:
-                                    repos.append((r, ''))
+                                    repos.append((r, '', ''))
                             save_repos(repos)
                             break
                         elif dk.lower() == 'q':
@@ -647,10 +661,11 @@ def action_diff(full_path):
 def detail_view(status):
     full_path = os.path.expanduser(status['path'])
     alias = status.get('alias', '')
+    group = status.get('group', '')
     display_name = status['display']
     while True:
         # Refresh status each loop
-        fresh = get_repo_status(status['path'], alias)
+        fresh = get_repo_status(status['path'], alias, group)
         if not fresh:
             return
         render_detail(fresh)
@@ -687,7 +702,7 @@ def main():
     # Auto-fetch on launch for accurate ahead/behind info
     print_header()
     print(f"  {BLUE}Fetching latest from remotes...{NC}")
-    for repo_path, alias in repos:
+    for repo_path, alias, _group in repos:
         path = os.path.expanduser(repo_path)
         if os.path.isdir(os.path.join(path, '.git')):
             subprocess.run(['git', '-C', path, 'fetch', '--quiet'],
@@ -699,10 +714,20 @@ def main():
         if refresh:
             repos = load_repos()
             statuses = []
-            for repo_path, alias in repos:
-                s = get_repo_status(repo_path, alias)
+            for repo_path, alias, group in repos:
+                s = get_repo_status(repo_path, alias, group)
                 if s:
                     statuses.append(s)
+
+            # Sort repos alphabetically within each group, preserving group order
+            seen_groups = []
+            for s in statuses:
+                g = s.get('group', '') or ''
+                if g not in seen_groups:
+                    seen_groups.append(g)
+            group_order = {g: i for i, g in enumerate(seen_groups)}
+            statuses.sort(key=lambda s: (group_order.get(s.get('group', '') or '', 999), s['display'].lower()))
+
             refresh = False
 
             if not statuses:
@@ -721,8 +746,26 @@ def main():
 
         col_widths = compute_col_widths(statuses)
         print_header()
-        for i, status in enumerate(statuses):
-            print(format_status_line(status, i == idx, col_widths))
+
+        # Group statuses by group name, preserving order
+        grouped = []
+        seen_groups = set()
+        for s in statuses:
+            g = s.get('group', '') or ''
+            if g not in seen_groups:
+                seen_groups.add(g)
+                grouped.append(g)
+
+        flat_idx = 0
+        for g in grouped:
+            group_statuses = [s for s in statuses if (s.get('group', '') or '') == g]
+            if g:
+                print(f"\n  {PINK}{BOLD}{g}{NC}")
+            elif len(seen_groups) > 1:
+                print(f"\n  {GRAY}{BOLD}Ungrouped{NC}")
+            for s in group_statuses:
+                print(format_status_line(s, flat_idx == idx, col_widths))
+                flat_idx += 1
 
         print(f"\n{GRAY}↑↓   |   Enter detail   |   R refresh   |   P pull all   |   M manage   |   Q quit{NC}")
 
