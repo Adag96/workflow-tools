@@ -492,6 +492,37 @@ def action_push(full_path):
     getch()
 
 
+def action_stage_commit(full_path):
+    """Stage all changes and commit (no pull, no push)."""
+    print()
+
+    # 1. Stage all
+    run_git_action(full_path, ['add', '-A'], 'stage all')
+
+    # 2. Check if there's anything to commit
+    status_output = git_cmd(full_path, ['status', '--porcelain'])
+    if not status_output.strip():
+        print(f"\n  {GRAY}Nothing to commit.{NC}")
+        print(f"\n{GRAY}Press any key to go back...{NC}")
+        getch()
+        return
+
+    # 3. Commit message
+    msg = prompt_input('Commit message:')
+    if not msg:
+        print(f"  {GRAY}Aborted (no message).{NC}")
+        print(f"\n{GRAY}Press any key to go back...{NC}")
+        getch()
+        return
+
+    # 4. Commit
+    run_git_action(full_path, ['commit', '-m', msg], 'commit')
+
+    print(f"\n  {GREEN}{BOLD}Committed (not pushed).{NC}")
+    print(f"\n{GRAY}Press any key to go back...{NC}")
+    getch()
+
+
 def render_detail(status):
     """Render the detail view (no input handling)."""
     full_path = os.path.expanduser(status['path'])
@@ -554,10 +585,26 @@ def render_detail(status):
             print(f"    {GRAY}{fname}{NC}")
         print()
 
-    # Recent commits
-    log = git_cmd(full_path, ['log', '--oneline', '-5'])
+    # Unpushed commits (committed but not pushed to remote)
+    if status['ahead']:
+        unpushed = git_cmd(full_path, ['log', '--oneline', '@{u}..HEAD'])
+        if unpushed:
+            print(f"  {PURPLE}{BOLD}⬆ {status['ahead']} unpushed{NC}")
+            for line in unpushed.split('\n'):
+                if not line:
+                    continue
+                hash_end = line.index(' ') if ' ' in line else len(line)
+                print(f"    {PURPLE}{line[:hash_end]}{NC} {line[hash_end:]}")
+            print()
+
+    # Recent commits (skip unpushed ones if any)
+    if status['ahead']:
+        log = git_cmd(full_path, ['log', '--oneline', '-5', '@{u}'])
+    else:
+        log = git_cmd(full_path, ['log', '--oneline', '-5'])
     if log:
-        print(f"  {BOLD}Recent commits:{NC}")
+        commits_label = "Recent pushed commits:" if status['ahead'] else "Recent commits:"
+        print(f"  {BOLD}{commits_label}{NC}")
         for line in log.split('\n'):
             if not line:
                 continue
@@ -608,12 +655,14 @@ def detail_view(status):
             return
         render_detail(fresh)
 
-        print(f"{GRAY}R resolve  |  P pull  |  D diff  |  Q back{NC}")
+        print(f"{GRAY}R resolve  |  C commit  |  P pull  |  D diff  |  Q back{NC}")
         key = getch()
         if key.lower() == 'q':
             return
         elif key.lower() == 'r':
             action_resolve(full_path, display_name)
+        elif key.lower() == 'c':
+            action_stage_commit(full_path)
         elif key.lower() == 'p':
             action_pull(full_path)
         elif key.lower() == 'd':
@@ -675,7 +724,7 @@ def main():
         for i, status in enumerate(statuses):
             print(format_status_line(status, i == idx, col_widths))
 
-        print(f"\n{GRAY}↑↓   |   Enter detail   |   P pull all   |   M manage   |   Q quit{NC}")
+        print(f"\n{GRAY}↑↓   |   Enter detail   |   R refresh   |   P pull all   |   M manage   |   Q quit{NC}")
 
         key = getch()
         if key == '\x1b[A':
@@ -684,6 +733,9 @@ def main():
             idx = (idx + 1) % len(statuses)
         elif key.lower() == 'q':
             sys.exit()
+        elif key.lower() == 'r':
+            fetch_all(repos)
+            refresh = True
         elif key.lower() == 'p':
             pull_all(repos)
             refresh = True
