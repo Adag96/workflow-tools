@@ -24,10 +24,17 @@ if [ "$SENDER" = "space_windows_change" ]; then
  echo "Space: $space" >> /tmp/sketchybar_debug.log
  echo "Raw apps: $apps" >> /tmp/sketchybar_debug.log
 
+ # Apps that appear on all spaces but shouldn't show in the icon strip
+ EXCLUDED_APPS="Vowen"
+
  icon_strip=""
  if [ "${apps}" != "" ]; then
    while read -r app
    do
+     # Skip excluded apps
+     if echo "$EXCLUDED_APPS" | grep -qw "$app"; then
+       continue
+     fi
      # Additional debug for each app
      icon="$($CONFIG_DIR/plugins/icon_map_fn.sh "$app")"
      echo "App: $app, Mapped Icon: $icon" >> /tmp/sketchybar_debug.log
@@ -47,8 +54,13 @@ if [ "$SENDER" = "space_windows_change" ]; then
  # Check if this space is currently active
  current_space=$(yabai -m query --spaces --space | jq '.index')
  
+ # Treat empty icon_strip (after filtering) as no apps
+ if [ -z "$icon_strip" ]; then
+   icon_strip=" -"
+ fi
+
  # Update the space icons item
- if [ "$space" = "$current_space" ] && [ "${apps}" != "" ]; then
+ if [ "$space" = "$current_space" ] && [ "$icon_strip" != " -" ]; then
    # Active space with apps - show Pill Level 4 background
    sketchybar --set space_icons.$space label="$icon_strip" \
                                       background.drawing=on \
