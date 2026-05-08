@@ -35,6 +35,13 @@ if [ -z "$SPACES_JSON" ] || [ "$SPACES_JSON" = "null" ]; then
                                          background.drawing=off \
                                          icon.drawing=off
     done
+
+    # Force correct ordering: space.N then space_icons.N for each space
+    REORDER_ARGS=""
+    for sid in "${SPACE_SIDS[@]}"; do
+        REORDER_ARGS+="space.$sid space_icons.$sid "
+    done
+    sketchybar --reorder $REORDER_ARGS
 else
     # Parse spaces from yabai - get index and display for each
     SPACE_COUNT=$(echo "$SPACES_JSON" | jq 'length')
@@ -43,7 +50,6 @@ else
         sid=$(echo "$SPACES_JSON" | jq -r ".[$i].index")
         display_id=$(echo "$SPACES_JSON" | jq -r ".[$i].display")
 
-        # Create the space number item with display association
         sketchybar --add space space.$sid left \
                    --set space.$sid space=$sid \
                                     icon=$sid \
@@ -52,7 +58,6 @@ else
                                     script="$PLUGIN_DIR/space.sh" \
                    --subscribe space.$sid display_change space_change
 
-        # Create a separate item for space icons with same display association
         sketchybar --add item space_icons.$sid left \
                    --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_MEDIUM.0" \
                                          label.padding_right=$PADDING_M \
@@ -62,6 +67,14 @@ else
                                          icon.drawing=off \
                                          associated_display=$display_id
     done
+
+    # Force correct ordering: space.N then space_icons.N for each space
+    REORDER_ARGS=""
+    for ((i=0; i<SPACE_COUNT; i++)); do
+        sid=$(echo "$SPACES_JSON" | jq -r ".[$i].index")
+        REORDER_ARGS+="space.$sid space_icons.$sid "
+    done
+    sketchybar --reorder $REORDER_ARGS
 fi
 
 sketchybar --add item space_separator left \

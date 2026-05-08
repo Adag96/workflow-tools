@@ -271,6 +271,16 @@ sketchybar --add bracket control_bracket reload.bar color_scheme \
                                 border_width=$BORDER_THICK \
                                 y_offset=$Y_OFFSET
 
+# Force correct item ordering (survives reloads where items already exist)
+SPACES_JSON=$(yabai -m query --spaces 2>/dev/null)
+if [ -n "$SPACES_JSON" ] && [ "$SPACES_JSON" != "null" ]; then
+    REORDER_ARGS=""
+    for sid in $(echo "$SPACES_JSON" | jq -r '.[].index'); do
+        REORDER_ARGS+="space.$sid space_icons.$sid "
+    done
+    sketchybar --reorder $REORDER_ARGS space_separator front_app ableton_timer_toggle yabai_mode yabai.toggle
+fi
+
 ##### Force all scripts to run the first time (never do this in a script) #####
 sketchybar --update
 
