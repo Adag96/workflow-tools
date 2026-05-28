@@ -13,6 +13,7 @@ git clone git@github.com:Adag96/workflow-tools.git ~/workflow-tools
 TOOLS:
 - Yabai: window tiling management
 - Sketchybar: status bar customization
+- Big Cleaner: TUI for finding and removing large/unnecessary files (aliased as `clean` in .zshrc)
 
 ----- ABLETON PROJECT TIMER SYNCHRONIZATION -----
 The Ableton Project Timer tracks project time across multiple machines. To maintain consistency:

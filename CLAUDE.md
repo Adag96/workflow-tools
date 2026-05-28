@@ -35,6 +35,7 @@ Yabai (tiling WM) + Sketchybar (status bar) for macOS. Two machines: Mac Studio 
 | `sketchybar/items/scheme.sh` | Color scheme definitions |
 | `sketchybar/plugins/todo.sh` | Todo widget (syncs via Dropbox) |
 | `install.sh` | Setup script — symlinks, directories, timer init |
+| `big-cleaner.py` | TUI disk cleanup tool (shell alias: `clean`) |
 
 ### Ableton Project Timer
 Tracks time per Ableton Live project. Auto-pauses on focus loss, resumes on focus gain (unless manually overridden).
