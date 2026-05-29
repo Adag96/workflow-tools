@@ -1,6 +1,7 @@
 #!/bin/bash
 
-source "$CONFIG_DIR/colors.sh"
+CONFIG_DIR="${CONFIG_DIR:-$HOME/workflow-tools/sketchybar}"
+source "$CONFIG_DIR/items/scheme.sh"
 source "$CONFIG_DIR/icons.sh"
 
 case "$(yabai -m query --windows --window | jq .floating)" in

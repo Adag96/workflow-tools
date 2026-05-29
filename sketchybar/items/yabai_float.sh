@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source "$CONFIG_DIR/colors.sh"
+source "$CONFIG_DIR/items/scheme.sh"
 
 sketchybar --add item yabai_float right \
            --set yabai_float background.color=$LEFT_ITEM_COLOR \

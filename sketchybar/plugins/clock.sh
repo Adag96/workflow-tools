@@ -23,4 +23,3 @@ sketchybar --set $NAME icon="$TIME" \
              label.padding_left=0 \
              2>/dev/null
 
-pkill -f "sleep 20"

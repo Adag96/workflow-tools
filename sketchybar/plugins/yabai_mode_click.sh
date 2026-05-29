@@ -1,6 +1,6 @@
 #!/bin/bash
-source "$HOME/.config/sketchybar/items/scheme.sh"
-source "$CONFIG_DIR/colors.sh"
+CONFIG_DIR="${CONFIG_DIR:-$HOME/workflow-tools/sketchybar}"
+source "$CONFIG_DIR/items/scheme.sh"
 source "$CONFIG_DIR/icons.sh"
 
 space_number=$(yabai -m query --spaces --space | jq -r .index)
