@@ -401,6 +401,23 @@ def prompt_input(label):
         return ''
 
 
+def prompt_commit_message():
+    """Prompt for a multi-line commit message. First line is the subject, subsequent lines are the body."""
+    first = prompt_input('Commit message:')
+    if not first:
+        return None
+    lines = [first]
+    print(f"  {GRAY}Add more lines (Enter on empty line to finish):{NC}")
+    while True:
+        extra = prompt_input('  +')
+        if not extra:
+            break
+        lines.append(extra)
+    if len(lines) == 1:
+        return lines[0]
+    return lines[0] + '\n\n' + '\n'.join(lines[1:])
+
+
 def run_git_action(repo_path, args, label):
     """Run a git command and show success/failure."""
     result = subprocess.run(
@@ -454,7 +471,7 @@ def action_resolve(full_path, display_path):
         status_after = git_cmd(full_path, ['status', '--porcelain'])
         if status_after.strip():
             # Commit message
-            msg = prompt_input('Commit message:')
+            msg = prompt_commit_message()
             if not msg:
                 print(f"  {GRAY}Aborted (no message).{NC}")
                 print(f"\n{GRAY}Press any key to go back...{NC}")
@@ -497,7 +514,7 @@ def action_commit(full_path):
         print(f"\n{GRAY}Press any key to go back...{NC}")
         getch()
         return
-    msg = prompt_input('Commit message:')
+    msg = prompt_commit_message()
     if not msg:
         print(f"  {GRAY}Aborted.{NC}")
         print(f"\n{GRAY}Press any key to go back...{NC}")
@@ -531,7 +548,7 @@ def action_stage_commit(full_path):
         return
 
     # 3. Commit message
-    msg = prompt_input('Commit message:')
+    msg = prompt_commit_message()
     if not msg:
         print(f"  {GRAY}Aborted (no message).{NC}")
         print(f"\n{GRAY}Press any key to go back...{NC}")
