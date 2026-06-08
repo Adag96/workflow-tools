@@ -9,6 +9,7 @@ from collections import defaultdict
 
 # Paths
 CONFIG_FILE = os.path.expanduser('~/.big_clean_threshold')
+HIDDEN_FILE = os.path.expanduser('~/.big_clean_hidden')
 MOLE_PATH = '/usr/local/bin/mo'
 
 # ANSI Color Codes (matching Mole's style)
@@ -43,6 +44,30 @@ def save_config():
     try:
         with open(CONFIG_FILE, 'w') as f:
             f.write(str(THRESHOLD_MB))
+    except: pass
+
+def load_hidden():
+    if os.path.exists(HIDDEN_FILE):
+        try:
+            with open(HIDDEN_FILE, 'r') as f:
+                return set(line.strip() for line in f if line.strip())
+        except: pass
+    return set()
+
+def add_hidden(paths):
+    try:
+        with open(HIDDEN_FILE, 'a') as f:
+            for p in paths:
+                f.write(p + '\n')
+    except: pass
+
+def remove_hidden(path):
+    hidden = load_hidden()
+    hidden.discard(path)
+    try:
+        with open(HIDDEN_FILE, 'w') as f:
+            for p in sorted(hidden):
+                f.write(p + '\n')
     except: pass
 
 def getch():
@@ -126,9 +151,10 @@ def score_file(f):
 
 LIBRARY_DIRS_DEEP = ['Caches', 'Application Support', 'Messages', 'Developer', 'Containers']
 
-def find_files(directories, threshold_mb, library_dirs=None):
+def find_files(directories, threshold_mb, library_dirs=None, hidden=None):
     threshold_bytes, repeat_min = threshold_mb * 1024 * 1024, REPEAT_MIN_MB * 1024 * 1024
     big_files, potential_repeats = [], defaultdict(list)
+    hidden = hidden or set()
     home = os.path.expanduser('~')
     lib_allowlist = library_dirs if library_dirs is not None else ['Caches', 'Application Support']
     print(f"\n{BLUE}Scanning...{ENDC}")
@@ -144,7 +170,7 @@ def find_files(directories, threshold_mb, library_dirs=None):
             for name in files:
                 path = os.path.join(root, name)
                 try:
-                    if not os.path.islink(path):
+                    if not os.path.islink(path) and path not in hidden:
                         size = os.path.getsize(path)
                         if size >= threshold_bytes: big_files.append({'path': path, 'size': size, 'mtime': os.path.getmtime(path), 'type': 'BIG'})
                         elif size >= repeat_min: potential_repeats[(root, re.sub(r'[_.-]v?\d+|\d{4}[-._]\d{2}[-._]\d{2}|copy|final|\(\d+\)', '', name.lower()).strip())].append({'path': path, 'size': size, 'mtime': os.path.getmtime(path)})
@@ -185,6 +211,7 @@ def results_view(files):
         half = visible // 2
         start = max(0, min(idx - half, len(files) - visible))
         end = min(len(files), start + visible)
+        term_width = os.get_terminal_size().columns
         for i in range(start, end):
             f = files[i]; path = f['path'].replace(os.path.expanduser('~'), '~')
             label = "[BIG]" if f['type'] == 'BIG' else ("[NEWEST]" if f.get('group_newest') else "[REPEAT]")
@@ -197,12 +224,21 @@ def results_view(files):
             else:
                 marker = f"  " if not is_selected else f"{YELLOW}● {ENDC}"
                 color = ENDC if not is_selected else YELLOW
+            # Visible prefix: "➤ [REPEAT]  999pt    999.99 MB  │  "
+            prefix_len = 2 + len(label) + 6 + 12 + 5  # marker + label + score field + size field + " │  "
+            max_path = term_width - prefix_len
+            if max_path > 0 and len(path) > max_path:
+                # Middle-truncate: keep start + end, prioritize the filename
+                keep_end = min(len(path) // 2, max_path * 2 // 3)
+                keep_start = max_path - keep_end - 1  # 1 for …
+                if keep_start < 1: keep_start, keep_end = 1, max_path - 2
+                path = path[:keep_start] + '…' + path[-keep_end:]
             print(f"{marker}{color}{label} {score_color}{score:4.0f}pt{ENDC} {color}{format_size(f['size']):>10}  │  {path}{ENDC}")
         print(f"\n{BLUE}───────────────────────────────────────────────────────────────────────{ENDC}")
         saved = f"  {GREEN}{BOLD}Saved: {format_size(total_saved)}{ENDC}" if total_saved > 0 else ""
         sel_info = f"  {YELLOW}{len(selected)} selected ({format_size(sum(files[i]['size'] for i in selected))}){ENDC}" if selected else ""
         sort_label = f"  {CYAN}Sort: {SORT_MODES[sort_idx][0]} (T){ENDC}"
-        print(f"{GREY}↑ ↓   |   S Select   |   O Open   |   D Delete   |   Q Back   |   {idx + 1} of {len(files)}{ENDC}{sort_label}{sel_info}{saved}")
+        print(f"{GREY}↑ ↓   |   S Select   |   O Open   |   D Delete   |   H Hide   |   Q Back   |   {idx + 1} of {len(files)}{ENDC}{sort_label}{sel_info}{saved}")
         key = getch()
         if key == '\x1b[A': idx = (idx - 1) % len(files)
         elif key == '\x1b[B': idx = (idx + 1) % len(files)
@@ -216,6 +252,17 @@ def results_view(files):
             if idx in selected: selected.discard(idx)
             else: selected.add(idx)
         elif key.lower() == 'o': os.system(f'open -R "{files[idx]["path"]}"')
+        elif key.lower() == 'h':
+            targets = sorted(selected, reverse=True) if selected else [idx]
+            count = len(targets)
+            print(f"\n{YELLOW}Hide {count} file{'s' if count > 1 else ''} from future results? (y/n){NC} ", end='', flush=True)
+            if getch().lower() == 'y':
+                add_hidden([files[i]['path'] for i in targets])
+                for i in targets:
+                    files.pop(i)
+                selected.clear()
+                idx = min(idx, len(files) - 1) if files else 0
+                if not files: return
         elif key.lower() == 'd':
             targets = sorted(selected, reverse=True) if selected else [idx]
             count = len(targets)
@@ -231,15 +278,57 @@ def results_view(files):
                 idx = min(idx, len(files) - 1) if files else 0
                 if not files: return
 
+def hidden_files_view():
+    while True:
+        hidden = sorted(load_hidden())
+        print_big_clean_header()
+        if not hidden:
+            print(f"  {GRAY}No hidden files.{NC}")
+            print(f"\n{GRAY}Q Back{NC}")
+            getch()
+            return
+        idx = 0
+        while True:
+            print_big_clean_header()
+            visible = os.get_terminal_size().lines - 11
+            visible = max(visible, 5)
+            half = visible // 2
+            start = max(0, min(idx - half, len(hidden) - visible))
+            end = min(len(hidden), start + visible)
+            for i in range(start, end):
+                path = hidden[i].replace(os.path.expanduser('~'), '~')
+                if i == idx:
+                    print(f"{PINK}➤ {path}{ENDC}")
+                else:
+                    print(f"  {path}")
+            print(f"\n{BLUE}───────────────────────────────────────────────────────────────────────{ENDC}")
+            print(f"{GREY}↑ ↓   |   U Unhide   |   Q Back   |   {idx + 1} of {len(hidden)}{ENDC}")
+            key = getch()
+            if key == '\x1b[A': idx = (idx - 1) % len(hidden)
+            elif key == '\x1b[B': idx = (idx + 1) % len(hidden)
+            elif key.lower() == 'q': return
+            elif key.lower() == 'u':
+                path = hidden[idx]
+                short = path.replace(os.path.expanduser('~'), '~')
+                print(f"\n{YELLOW}Unhide {short}? (y/n){NC} ", end='', flush=True)
+                if getch().lower() == 'y':
+                    remove_hidden(path)
+                    hidden = sorted(load_hidden())
+                    if not hidden: return
+                    idx = min(idx, len(hidden) - 1)
+
 def big_clean_submenu():
     global THRESHOLD_MB
     idx = 0
     while True:
+        hidden = load_hidden()
+        hidden_desc = f"Manage hidden paths ({len(hidden)} hidden)" if hidden else "Manage hidden paths (none)"
         options = [
             ("Quick Scan", "Downloads, Desktop, Movies, Documents, Caches"),
             ("Current Dir", "Scan current working directory"),
             ("Deep Scan", "Full home directory scan"),
             ("Threshold", f"Set minimum size ({THRESHOLD_MB} MB)"),
+            ("Hidden Files", hidden_desc),
         ]
         print_big_clean_header()
         for i, (name, desc) in enumerate(options):
@@ -256,17 +345,21 @@ def big_clean_submenu():
                 try: line = sys.stdin.readline(); THRESHOLD_MB = int(line.strip()); save_config()
                 except: pass
                 continue
+            elif idx == 4:
+                hidden_files_view()
+                continue
+            hidden = load_hidden()
             if idx == 0:
                 quick_dirs = [os.path.expanduser(p) for p in [
                     '~/Downloads', '~/Desktop', '~/Movies', '~/Documents',
                     '~/Library/Caches',
                     '~/Library/Application Support/Adobe/Common/Media Cache Files',
                 ]]
-                results_view(find_files(quick_dirs, THRESHOLD_MB))
+                results_view(find_files(quick_dirs, THRESHOLD_MB, hidden=hidden))
             elif idx == 1:
-                results_view(find_files(['.'], THRESHOLD_MB))
+                results_view(find_files(['.'], THRESHOLD_MB, hidden=hidden))
             else:
-                results_view(find_files([os.path.expanduser('~')], THRESHOLD_MB, library_dirs=LIBRARY_DIRS_DEEP))
+                results_view(find_files([os.path.expanduser('~')], THRESHOLD_MB, library_dirs=LIBRARY_DIRS_DEEP, hidden=hidden))
 
 def main():
     load_config()
