@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import subprocess
 import sys
 import tty
 import termios
@@ -251,7 +252,7 @@ def results_view(files):
         elif key.lower() == 's':
             if idx in selected: selected.discard(idx)
             else: selected.add(idx)
-        elif key.lower() == 'o': os.system(f'open -R "{files[idx]["path"]}"')
+        elif key.lower() == 'o': subprocess.run(['open', '-R', files[idx]['path']])
         elif key.lower() == 'h':
             targets = sorted(selected, reverse=True) if selected else [idx]
             count = len(targets)
@@ -269,13 +270,19 @@ def results_view(files):
             total_size = sum(files[i]['size'] for i in targets)
             print(f"\n{YELLOW}Delete {count} file{'s' if count > 1 else ''} ({format_size(total_size)})? (y/n){NC} ", end='', flush=True)
             if getch().lower() == 'y':
-                for i in targets:
-                    try: os.remove(files[i]['path']); total_saved += files[i]['size']
-                    except: pass
-                for i in targets:
-                    files.pop(i)
+                failed = 0
+                for i in targets:  # descending order, so pops don't shift pending indices
+                    try:
+                        os.remove(files[i]['path'])
+                        total_saved += files[i]['size']
+                        files.pop(i)
+                    except OSError:
+                        failed += 1
                 selected.clear()
                 idx = min(idx, len(files) - 1) if files else 0
+                if failed:
+                    print(f"\n{YELLOW}{failed} file{'s' if failed > 1 else ''} could not be deleted (kept in list) — press any key{NC} ", end='', flush=True)
+                    getch()
                 if not files: return
 
 def hidden_files_view():
