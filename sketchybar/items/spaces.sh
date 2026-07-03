@@ -24,8 +24,7 @@ if [ -z "$SPACES_JSON" ] || [ "$SPACES_JSON" = "null" ]; then
         sketchybar --add space space.$sid left \
                    --set space.$sid space=$sid \
                                     icon=$sid \
-                                    label.drawing=off \
-                                    script="$PLUGIN_DIR/space.sh"
+                                    label.drawing=off
 
         sketchybar --add item space_icons.$sid left \
                    --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_MEDIUM.0" \
@@ -54,9 +53,7 @@ else
                    --set space.$sid space=$sid \
                                     icon=$sid \
                                     label.drawing=off \
-                                    associated_display=$display_id \
-                                    script="$PLUGIN_DIR/space.sh" \
-                   --subscribe space.$sid display_change space_change
+                                    associated_display=$display_id
 
         sketchybar --add item space_icons.$sid left \
                    --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_MEDIUM.0" \
@@ -76,6 +73,16 @@ else
     done
     sketchybar --reorder $REORDER_ARGS
 fi
+
+# Single hidden watcher drives styling for ALL space items via one batched
+# script run — replaces the old per-space-item script/subscription fan-out
+sketchybar --add item spaces_watcher left \
+           --set spaces_watcher drawing=off \
+                                script="$PLUGIN_DIR/space.sh" \
+           --subscribe spaces_watcher space_change display_change
+
+# Set initial styling now instead of waiting for the first space change
+"$PLUGIN_DIR/space.sh" &
 
 sketchybar --add item space_separator left \
           --set space_separator icon=">" \

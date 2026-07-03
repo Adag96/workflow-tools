@@ -1,4 +1,9 @@
-#!/bin/sh
+#!/bin/bash
+
+# Batch handler for all space items, subscribed once (via spaces_watcher) to
+# space_change/display_change. One yabai query + one sketchybar call updates
+# every space.N / space_icons.N / space_N_bracket — replaces the old per-item
+# scripts (9 spawns × 9 queries per space switch).
 
 # Load the dynamic sizing variables directly
 export SCALE_FACTOR=10
@@ -13,68 +18,69 @@ source "$HOME/.config/sketchybar/items/scheme.sh"
 current_scheme=$(cat "$COLOR_SCHEME_CACHE")
 get_colors "$current_scheme"
 
-# On display_change, refresh display association for this space and its icons
-if [ "$SENDER" = "display_change" ]; then
-    SPACE_DISPLAY=$(yabai -m query --spaces --space $SID 2>/dev/null | jq -r '.display // empty')
-    if [ -n "$SPACE_DISPLAY" ]; then
-        sketchybar --set $NAME associated_display=$SPACE_DISPLAY \
-                   --set space_icons.$SID associated_display=$SPACE_DISPLAY
+# Latest-wins guard: if another instance is mid-update, flag it to run one more
+# pass with fresh state and exit. Prevents pileup AND out-of-order updates.
+LOCK_DIR="/tmp/sketchybar_space_refresh.lock"
+RERUN_FLAG="$LOCK_DIR/rerun"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  touch "$RERUN_FLAG" 2>/dev/null
+  exit 0
+fi
+trap 'rm -rf "$LOCK_DIR"' EXIT
+
+while :; do
+  rm -f "$RERUN_FLAG"
+
+  # yabai down (e.g. mid-restart): nothing to update, exit quietly
+  SPACES_JSON=$(yabai -m query --spaces 2>/dev/null)
+  [ -z "$SPACES_JSON" ] || [ "$SPACES_JSON" = "null" ] && exit 0
+
+  # Items are created at config load; skip spaces added since (no item to style)
+  BAR_ITEMS=" $(sketchybar --query bar 2>/dev/null | jq -r '.items | join(" ")') "
+
+  ARGS=()
+  while IFS=$'\t' read -r sid display windows visible; do
+    [ -z "$sid" ] && continue
+    case "$BAR_ITEMS" in *" space.$sid "*) ;; *) continue ;; esac
+
+    if [ "$visible" = "true" ]; then
+      # Active/visible space: accent number, bracket on, icon pill if occupied
+      ARGS+=(--set "space.$sid" background.drawing=off \
+                               icon.color=$ACCENT_COLOR \
+                               icon.font="SF Pro:Bold:$FONT_SIZE_LARGE.0" \
+                               icon.padding_left=6 \
+                               icon.padding_right=0 \
+                               associated_display=$display)
+      ARGS+=(--set "space_${sid}_bracket" background.drawing=on)
+      if [ "${windows:-0}" -gt 0 ]; then
+        ARGS+=(--set "space_icons.$sid" background.drawing=on \
+                                        background.color=$PILL_COLOR_4 \
+                                        background.corner_radius=$RADIUS_L4 \
+                                        background.height=$HEIGHT_L4 \
+                                        label.color=$LEFT_TEXT_COLOR \
+                                        associated_display=$display)
+      else
+        ARGS+=(--set "space_icons.$sid" background.drawing=off \
+                                        associated_display=$display)
+      fi
+    else
+      # Inactive space: plain number, no bracket, no icon pill
+      ARGS+=(--set "space.$sid" background.drawing=off \
+                               icon.color=$LEFT_TEXT_COLOR \
+                               icon.font="SF Pro:Regular:$FONT_SIZE_LARGE.0" \
+                               icon.padding_left=0 \
+                               icon.padding_right=0 \
+                               associated_display=$display)
+      ARGS+=(--set "space_${sid}_bracket" background.drawing=off)
+      ARGS+=(--set "space_icons.$sid" background.drawing=off \
+                                      label.color=$LEFT_TEXT_COLOR \
+                                      associated_display=$display)
     fi
-fi
+  done < <(echo "$SPACES_JSON" | jq -r \
+    '.[] | [.index, .display, (.windows | length), ."is-visible"] | @tsv')
 
-# Check if the space has any windows
-WINDOWS_COUNT=$(yabai -m query --spaces --space $SID | jq '.windows | length')
+  [ ${#ARGS[@]} -gt 0 ] && sketchybar "${ARGS[@]}"
 
-if [ "$SELECTED" = "true" ]; then
-  # State: Active/Focused Space 
-  # Show the space number without its own background (contained in bracket)
-  sketchybar --set $NAME background.drawing=off \
-                         icon.color=$ACCENT_COLOR \
-                         icon.font="SF Pro:Bold:$FONT_SIZE_LARGE.0" \
-                         icon.padding_left=6 \
-                         icon.padding_right=0
-  
-  # Show the concentric Pill Level 3 bracket (space number + icons)
-  sketchybar --set space_${SID}_bracket background.drawing=on
-  
-  # If this space has windows, show Pill Level 4 for icons (innermost)
-  if [ "$WINDOWS_COUNT" -gt 0 ]; then
-    sketchybar --set space_icons.$SID background.drawing=on \
-                                     background.color=$PILL_COLOR_4 \
-                                     background.corner_radius=$RADIUS_L4 \
-                                     background.height=$HEIGHT_L4 \
-                                     label.color=$LEFT_TEXT_COLOR
-  else
-    sketchybar --set space_icons.$SID background.drawing=off
-  fi
-  
-elif [ "$WINDOWS_COUNT" -gt 0 ]; then
-  # State: Occupied but Inactive Space
-  # No backgrounds, space number in white color
-  sketchybar --set $NAME background.drawing=off \
-                         icon.color=$LEFT_TEXT_COLOR \
-                         icon.font="SF Pro:Regular:$FONT_SIZE_LARGE.0" \
-                         icon.padding_left=0 \
-                         icon.padding_right=0
-  
-  # Hide the concentric bracket
-  sketchybar --set space_${SID}_bracket background.drawing=off
-  
-  # Show icons without background
-  sketchybar --set space_icons.$SID background.drawing=off \
-                                   label.color=$LEFT_TEXT_COLOR
-else
-  # State: Empty and Inactive Space
-  # No backgrounds, space number in white
-  sketchybar --set $NAME background.drawing=off \
-                         icon.color=$LEFT_TEXT_COLOR \
-                         icon.font="SF Pro:Regular:$FONT_SIZE_LARGE.0" \
-                         icon.padding_left=0 \
-                         icon.padding_right=0
-  
-  # Hide the concentric bracket
-  sketchybar --set space_${SID}_bracket background.drawing=off
-  
-  # Hide icons
-  sketchybar --set space_icons.$SID background.drawing=off
-fi
+  # An event arrived while we were updating — loop once more with fresh state
+  [ -f "$RERUN_FLAG" ] || break
+done
