@@ -20,11 +20,11 @@ echo "adam ALL=(root) NOPASSWD: sha256:$(shasum -a 256 /opt/homebrew/bin/yabai |
 ```
 
 ### Debug Logs
-- Timer debug: `/tmp/ableton_timer_debug.log`
 - Yabai status: `/tmp/yabai_status`
+- Display watcher: `/tmp/display_watcher.log`
 
 ### Dependencies
-- `jq` — used extensively for JSON manipulation in timer scripts
+- `jq` — used extensively for JSON manipulation across scripts
 
 ## Project Context
 
@@ -40,30 +40,17 @@ Yabai (tiling WM) + Sketchybar (status bar) for macOS. Two machines: Mac Studio 
 |------|---------|
 | `yabairc` | Yabai config |
 | `sketchybar/sketchybarrc` | Main config + scaling system (`SCALE_FACTOR`) |
-| `sketchybar/plugins/ableton_project_timer.sh` | Ableton session timer |
 | `sketchybar/items/scheme.sh` | Color scheme definitions |
-| `sketchybar/plugins/todo.sh` | Todo widget (syncs via Dropbox) |
-| `install.sh` | Setup script — symlinks, directories, timer init |
+| `sketchybar/plugins/todo.sh` | Todo widget (disabled; syncs via Dropbox) |
+| `install.sh` | Setup script — symlinks, directories |
 | `big-cleaner.py` | TUI disk cleanup tool (shell alias: `clean`) |
 
-### Ableton Project Timer
-Tracks time per Ableton Live project. Auto-pauses on focus loss, resumes on focus gain (unless manually overridden).
-
-**Data locations** (never in git):
-- **Primary**: `/Volumes/T7/Ableton Timer Data/timer_state.json`
-- **Fallback**: `~/.local/share/sketchybar_timer_data/timer_state.json`
-- Shows "No Drive!" when T7 disconnected; syncs automatically when reconnected
-
-**State files** (in `~/.local/share/sketchybar_timer_data/`):
-- `timer_state.json` — project times
-- `last_ableton_state.json` — focus tracking
-- `manual_override.json` — pause override
+### Retired Features
+- **Ableton Project Timer** — removed July 2026. Old on-disk data may still exist at `/Volumes/T7/Ableton Timer Data/` and `~/.local/share/sketchybar_timer_data/` (intentionally not deleted).
 
 ### Color Scheme
 - Current scheme stored in `~/.cache/sketchybar/current_scheme`
 - `items/scheme.sh` defines all color variables via `get_colors()`
 
 ## Prohibited Changes
-- Do NOT modify `timer_state.json` without explicit permission
-- Do NOT change T7 drive path or local fallback path without asking
-- Timer data files live outside the repo — never commit them
+- Do NOT delete the retired timer's data dirs (`/Volumes/T7/Ableton Timer Data/`, `~/.local/share/sketchybar_timer_data/`) without explicit permission

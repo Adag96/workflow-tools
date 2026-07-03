@@ -32,7 +32,7 @@ for sid in "${SPACE_SIDS[@]}"; do
 done
 
 # Left pill: all spaces, front app, and yabai controls (PILL LEVEL 1)
-sketchybar --add bracket left_bracket $ALL_SPACE_ITEMS space_separator front_app ableton_timer_toggle yabai_mode yabai.toggle \
+sketchybar --add bracket left_bracket $ALL_SPACE_ITEMS space_separator front_app yabai_mode yabai.toggle \
            --set left_bracket background.color=$PILL_COLOR_1 \
                               background.height=$HEIGHT_L2 \
                               background.corner_radius=$RADIUS_L1 \

@@ -25,10 +25,6 @@ export RELOAD_ICON="􂣾"
 # Color scheme selector icon
 export SCHEME_ICON="􀏅"
 
-# Ableton timer icons
-export RESUME_TIMER_ICON="􀊖"
-export PAUSE_TIMER_ICON="􀊘"
-
 # Todo list icons
 export TODO_ICON="􀆅"        # checkmark
 export TODO_TIMER_ICON="􀐭"  # timer

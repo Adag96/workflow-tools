@@ -11,6 +11,5 @@ if [ "$SENDER" = "front_app_switched" ]; then
   sketchybar --set "$NAME" icon="$icon"
   
   # Always set the label for all apps
-  # The Ableton timer will overwrite this label for Live when it's ready
   sketchybar --set "$NAME" label="$INFO"
 fi

@@ -115,22 +115,6 @@ sketchybar --default "${default[@]}"
 source $ITEM_DIR/spaces.sh
 source $ITEM_DIR/front_app.sh
 
-# Add timer toggle button (disabled — not in use, debug log was filling disk)
-# sketchybar --add item ableton_timer_toggle left \
-#            --set ableton_timer_toggle drawing=off \
-#            --set ableton_timer_toggle \
-#                  label.drawing=on \
-#                  label.padding_right=8 \
-#                  label.padding_left=6 \
-#                  icon.drawing=off \
-#                  background.color=$PILL_COLOR_2 \
-#                  background.drawing=off \
-#                  padding_left=0 \
-#                  padding_right=3 \
-#            --set ableton_timer_toggle click_script="$HOME/.config/sketchybar/plugins/ableton_project_timer.sh toggle" \
-#            --set ableton_timer_toggle label="$RESUME_ICON" \
-#            --set ableton_timer_toggle associated_display=active
-
 # Yabai mode toggle
 sketchybar -m --add item yabai_mode left \
               --set yabai_mode \
@@ -283,5 +267,3 @@ fi
 ##### Force all scripts to run the first time (never do this in a script) #####
 sketchybar --update
 
-# Initialize Ableton project timer (disabled)
-# "$CONFIG_DIR/plugins/ableton_project_timer.sh" init
