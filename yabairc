@@ -1,5 +1,8 @@
-yabai -m signal --add event=dock_did_restart action="sudo yabai --load-sa"
-  sudo yabai --load-sa
+# Scripting addition: sudoers rule is sha256-pinned (/etc/sudoers.d/yabai), so
+# -n fails fast instead of hanging on a password prompt if the binary hash has
+# drifted after a yabai upgrade — re-pin command is in CLAUDE.md
+yabai -m signal --add event=dock_did_restart action="sudo -n /opt/homebrew/bin/yabai --load-sa"
+sudo -n /opt/homebrew/bin/yabai --load-sa
 
 # bsp, stack or float
 yabai -m config layout bsp

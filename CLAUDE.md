@@ -13,6 +13,12 @@ sketchybar --reload          # Reload sketchybar config
 yabai --restart-service      # Restart yabai
 ```
 
+### After upgrading/rebuilding yabai
+The sudoers rule for the scripting addition is sha256-pinned; a new binary breaks `--load-sa` until re-pinned:
+```bash
+echo "adam ALL=(root) NOPASSWD: sha256:$(shasum -a 256 /opt/homebrew/bin/yabai | awk '{print $1}') /opt/homebrew/bin/yabai --load-sa" | sudo tee /etc/sudoers.d/yabai
+```
+
 ### Debug Logs
 - Timer debug: `/tmp/ableton_timer_debug.log`
 - Yabai status: `/tmp/yabai_status`
