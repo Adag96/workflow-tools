@@ -12,6 +12,5 @@ sketchybar --add item front_app left \
                                 label.color=$LEFT_TEXT_COLOR \
                                 padding_right=$PADDING_M \
                                 associated_display=active \
-                                update_freq=1 \
                                 script="$PLUGIN_DIR/front_app.sh" \
            --subscribe front_app front_app_switched
