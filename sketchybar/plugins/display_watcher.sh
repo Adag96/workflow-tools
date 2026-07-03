@@ -48,8 +48,14 @@ if ! mkdir "$LOCK_DIR" 2>/dev/null; then
 fi
 trap 'rm -rf "$LOCK_DIR"' EXIT
 
-# --- Machine detection ---
+# --- Machine detection (fail safe: only proceed on a positively identified
+# non-Studio machine — an empty scutil result must never fall through to
+# space creation/destruction) ---
 MACHINE_NAME=$(scutil --get ComputerName 2>/dev/null)
+if [ -z "$MACHINE_NAME" ]; then
+    log "ERROR: could not determine machine name — refusing to manage spaces"
+    exit 0
+fi
 if [[ "$MACHINE_NAME" == *"Studio"* ]]; then
     log "Mac Studio detected — skipping space management"
     exit 0
@@ -74,14 +80,39 @@ fi
 DISPLAY_COUNT=$(echo "$DISPLAYS_JSON" | jq 'length')
 log "Detected $DISPLAY_COUNT display(s)"
 
+# --- Resolve which yabai display is the built-in panel ---
+# yabai (7.x) has no is-builtin field, and its display indices follow the
+# macOS arrangement (not guaranteed 1=laptop). system_profiler knows the
+# internal panel and reports the same CoreGraphics display ID yabai uses.
+resolve_builtin_index() {
+    local cg_id
+    cg_id=$(system_profiler SPDisplaysDataType -json 2>/dev/null | jq -r \
+        '[.SPDisplaysDataType[].spdisplays_ndrvs[]?
+          | select(.spdisplays_connection_type == "spdisplays_internal")
+          | ._spdisplays_displayID][0] // empty')
+    case "$cg_id" in
+        ''|*[!0-9]*) return ;;  # empty or non-numeric — caller falls back
+    esac
+    echo "$DISPLAYS_JSON" | jq -r "[.[] | select(.id == $cg_id)][0].index // empty"
+}
+
 # --- Define target space counts per display ---
 if [ "$DISPLAY_COUNT" -eq 1 ]; then
-    TARGET_1=5
-    TARGET_2=0
+    LAPTOP_INDEX=$(echo "$DISPLAYS_JSON" | jq '.[0].index')
+    EXTERNAL_INDEX=""
+    TARGET_LAPTOP=5
+    TARGET_EXTERNAL=0
 else
-    TARGET_1=3  # Built-in (laptop)
-    TARGET_2=6  # External monitor
+    LAPTOP_INDEX=$(resolve_builtin_index)
+    if [ -z "$LAPTOP_INDEX" ]; then
+        log "WARNING: could not identify built-in display — assuming index 1"
+        LAPTOP_INDEX=1
+    fi
+    EXTERNAL_INDEX=$(echo "$DISPLAYS_JSON" | jq -r "[.[] | select(.index != $LAPTOP_INDEX)][0].index")
+    TARGET_LAPTOP=3   # Built-in (laptop)
+    TARGET_EXTERNAL=6 # External monitor
 fi
+log "Built-in display index: $LAPTOP_INDEX, external: ${EXTERNAL_INDEX:-none}"
 
 # --- Adjust spaces for a display ---
 adjust_display() {
@@ -128,12 +159,12 @@ adjust_display() {
 }
 
 # Pass 1: Create spaces where needed (do this first)
-adjust_display 1 "$TARGET_1" "create"
-[ "$TARGET_2" -gt 0 ] && adjust_display 2 "$TARGET_2" "create"
+adjust_display "$LAPTOP_INDEX" "$TARGET_LAPTOP" "create"
+[ -n "$EXTERNAL_INDEX" ] && adjust_display "$EXTERNAL_INDEX" "$TARGET_EXTERNAL" "create"
 
 # Pass 2: Destroy excess spaces
-adjust_display 1 "$TARGET_1" "destroy"
-[ "$TARGET_2" -gt 0 ] && adjust_display 2 "$TARGET_2" "destroy"
+adjust_display "$LAPTOP_INDEX" "$TARGET_LAPTOP" "destroy"
+[ -n "$EXTERNAL_INDEX" ] && adjust_display "$EXTERNAL_INDEX" "$TARGET_EXTERNAL" "destroy"
 
 # Balance windows after adjustments
 yabai -m space --balance 2>/dev/null
