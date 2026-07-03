@@ -12,7 +12,7 @@ T7_TIMER_DIR="/Volumes/T7/Ableton Timer Data"
 T7_TIMER_STATE_FILE="$T7_TIMER_DIR/timer_state.json"
 
 # Create necessary directories
-mkdir -p "$SKETCHYBAR_CONFIG_PATH"
+mkdir -p "$HOME/.config"
 mkdir -p "$LOCAL_TIMER_DATA_DIR"
 
 # If T7 is connected, create the directory there too
@@ -21,13 +21,24 @@ if [ -d "/Volumes/T7" ]; then
   echo "Created T7 timer directory at $T7_TIMER_DIR"
 fi
 
-# Yabai configuration
-mkdir -p ~/.config/yabai
-ln -sf "$WORKFLOW_TOOLS_PATH/yabairc" ~/.config/yabai/yabairc
+# Yabai configuration — back up a pre-existing real config before symlinking
+mkdir -p "$HOME/.config/yabai"
+if [ -e "$HOME/.config/yabai/yabairc" ] && [ ! -L "$HOME/.config/yabai/yabairc" ]; then
+  mv "$HOME/.config/yabai/yabairc" "$HOME/.config/yabai/yabairc.bak.$(date +%s)"
+  echo "Backed up existing yabairc"
+fi
+ln -sf "$WORKFLOW_TOOLS_PATH/yabairc" "$HOME/.config/yabai/yabairc"
 
-# Sketchybar configuration
-rm -rf "$SKETCHYBAR_CONFIG_PATH"
-ln -sf "$WORKFLOW_TOOLS_PATH/sketchybar" "$SKETCHYBAR_CONFIG_PATH"
+# Sketchybar configuration — skip if already linked; back up anything else (never delete)
+if [ "$(readlink "$SKETCHYBAR_CONFIG_PATH")" = "$WORKFLOW_TOOLS_PATH/sketchybar" ]; then
+  echo "Sketchybar config already linked"
+else
+  if [ -e "$SKETCHYBAR_CONFIG_PATH" ] || [ -L "$SKETCHYBAR_CONFIG_PATH" ]; then
+    mv "$SKETCHYBAR_CONFIG_PATH" "$SKETCHYBAR_CONFIG_PATH.bak.$(date +%s)"
+    echo "Backed up existing sketchybar config"
+  fi
+  ln -s "$WORKFLOW_TOOLS_PATH/sketchybar" "$SKETCHYBAR_CONFIG_PATH"
+fi
 
 # Initialize Yabai status file
 if pgrep -q yabai; then
@@ -88,15 +99,20 @@ if [ "$TIMER_FILE" = "$T7_TIMER_STATE_FILE" ] && [ ! -f "$LOCAL_TIMER_STATE_FILE
   echo "Created local backup copy of timer state"
 fi
 
-# Ensure other necessary timer data files exist
-echo '{
+# Ensure other necessary timer data files exist (never reset existing ones —
+# manual_override holds a live pause state)
+if [ ! -f "$LOCAL_TIMER_DATA_DIR/last_ableton_state.json" ]; then
+  echo '{
   "running": false,
   "last_check_time": 0
 }' > "$LOCAL_TIMER_DATA_DIR/last_ableton_state.json"
+fi
 
-echo '{
+if [ ! -f "$LOCAL_TIMER_DATA_DIR/manual_override.json" ]; then
+  echo '{
   "enabled": false,
   "timestamp": 0
 }' > "$LOCAL_TIMER_DATA_DIR/manual_override.json"
+fi
 
 echo "Ableton project timer installed successfully"
