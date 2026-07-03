@@ -24,7 +24,10 @@ fi
 
 # Run the actual move check in background after a short delay
 (
-  echo $$ > "$DEBOUNCE_PID_FILE"
+  MYPID=$(sh -c 'echo $PPID')
+  # Remove the pid file only if it still holds our PID — a successor that just
+  # killed us has already overwritten it with its own
+  trap '[ "$(cat "$DEBOUNCE_PID_FILE" 2>/dev/null)" = "$MYPID" ] && rm -f "$DEBOUNCE_PID_FILE"' EXIT
   sleep 0.15
 
   # Get window info
@@ -58,6 +61,8 @@ fi
     yabai -m window "$WINDOW_ID" --focus
     (sleep 1 && rm -f "$LOCK_FILE") &
   fi
-
-  rm -f "$DEBOUNCE_PID_FILE"
 ) &
+# Record the subshell's PID for the debounce kill above. $! is used because the
+# obvious in-subshell $$ is the parent's PID, and $BASHPID needs bash 4+ (this
+# runs under macOS stock bash 3.2 via yabai's minimal PATH).
+echo $! > "$DEBOUNCE_PID_FILE"

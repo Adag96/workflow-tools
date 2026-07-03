@@ -45,8 +45,10 @@ volume_change() {
 
 # Routine update: poll actual system volume to catch changes from SoundSource etc.
 routine_update() {
-  VOLUME=$(osascript -e 'output volume of (get volume settings)' 2>/dev/null)
-  MUTED=$(osascript -e 'output muted of (get volume settings)' 2>/dev/null)
+  # osascript can hang indefinitely if Apple Events stall; alarm-kill after 5s
+  # so instances can't pile up across ticks (same failure class as the cpu.sh incident)
+  VOLUME=$(perl -e 'alarm 5; exec @ARGV' osascript -e 'output volume of (get volume settings)' 2>/dev/null)
+  MUTED=$(perl -e 'alarm 5; exec @ARGV' osascript -e 'output muted of (get volume settings)' 2>/dev/null)
 
   # Handle muted state
   if [ "$MUTED" = "true" ]; then

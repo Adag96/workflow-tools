@@ -2,6 +2,9 @@
 - Be concise. User wants working solutions, not explanations.
 - Skip verbose justifications — just fix it.
 
+## Lessons
+`.claude/Claude-Lessons.md` — **read at session start**. Key gotchas: scripts run under stock bash 3.2 (no `$BASHPID`/`declare -A`); polling plugins need reentrancy guards.
+
 ## Quick Reference
 
 ### Reload Commands
