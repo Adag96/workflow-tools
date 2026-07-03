@@ -18,12 +18,6 @@ if [ "$SENDER" = "space_windows_change" ]; then
  space="$(echo "$INFO" | jq -r '.space')"
  apps="$(echo "$INFO" | jq -r '.apps | keys[]')"
 
- # Debug logging
- echo "----------------------" >> /tmp/sketchybar_debug.log
- echo "Timestamp: $(date)" >> /tmp/sketchybar_debug.log
- echo "Space: $space" >> /tmp/sketchybar_debug.log
- echo "Raw apps: $apps" >> /tmp/sketchybar_debug.log
-
  # Apps that appear on all spaces but shouldn't show in the icon strip
  EXCLUDED_APPS="Vowen"
 
@@ -35,9 +29,7 @@ if [ "$SENDER" = "space_windows_change" ]; then
      if echo "$EXCLUDED_APPS" | grep -qw "$app"; then
        continue
      fi
-     # Additional debug for each app
      icon="$($CONFIG_DIR/plugins/icon_map_fn.sh "$app")"
-     echo "App: $app, Mapped Icon: $icon" >> /tmp/sketchybar_debug.log
      if [ -z "$icon_strip" ]; then
        icon_strip="$icon"
      else
@@ -47,9 +39,6 @@ if [ "$SENDER" = "space_windows_change" ]; then
  else
    icon_strip=" -"
  fi
-
- # Debug the final icon strip
- echo "Final Icon Strip: $icon_strip" >> /tmp/sketchybar_debug.log
 
  # Check if this space is currently active
  current_space=$(yabai -m query --spaces --space | jq '.index')

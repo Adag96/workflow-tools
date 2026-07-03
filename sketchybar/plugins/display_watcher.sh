@@ -17,6 +17,11 @@ COOLDOWN_SECONDS=10
 
 log() { echo "$(date '+%Y-%m-%d %H:%M:%S'): $1" >> "$LOG_FILE"; }
 
+# Cap the log at ~256KB (keep the recent half) so it can't grow unbounded
+if [ -f "$LOG_FILE" ] && [ "$(stat -f%z "$LOG_FILE" 2>/dev/null || echo 0)" -gt 262144 ]; then
+    tail -c 131072 "$LOG_FILE" > "$LOG_FILE.tmp" && mv "$LOG_FILE.tmp" "$LOG_FILE"
+fi
+
 # --- Cooldown: skip if we completed a run recently ---
 if [ -f "$COOLDOWN_FILE" ]; then
     last_run=$(cat "$COOLDOWN_FILE" 2>/dev/null)

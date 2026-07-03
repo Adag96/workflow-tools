@@ -6,9 +6,6 @@ source "$HOME/.config/sketchybar/icons.sh"
 # File to track Yabai status
 STATUS_FILE="/tmp/yabai_status"
 
-# Log the toggle event
-echo "$(date): Toggling Yabai..." >> /tmp/yabai_toggle.log
-
 # Check if status file exists, create it if not (default to running)
 if [ ! -f "$STATUS_FILE" ]; then
   echo "running" > "$STATUS_FILE"
@@ -21,7 +18,6 @@ CURRENT_STATUS=$(cat "$STATUS_FILE")
 # Instead of using variables, we'll use direct sketchybar property commands
 if [ "$CURRENT_STATUS" = "running" ]; then
   # Stop Yabai
-  echo "$(date): Stopping Yabai..." >> /tmp/yabai_toggle.log
   yabai --stop-service
   
   # Update status
@@ -36,7 +32,6 @@ if [ "$CURRENT_STATUS" = "running" ]; then
   (sleep 2 && sketchybar --set yabai.toggle label.drawing=off) &
 else
   # Start Yabai
-  echo "$(date): Starting Yabai..." >> /tmp/yabai_toggle.log
   yabai --start-service
   
   # Update status

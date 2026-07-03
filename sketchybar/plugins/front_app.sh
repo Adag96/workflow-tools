@@ -3,8 +3,7 @@
 source "$CONFIG_DIR/fonts.sh"  # Loads all defined fonts
 
 if [ "$SENDER" = "front_app_switched" ]; then
-  echo "$(date): Front app switched to: $INFO" >> /tmp/front_app_debug.log
-  
+
   # Get the app icon
   icon="$($CONFIG_DIR/plugins/icon_map_fn.sh "$INFO")"
   
