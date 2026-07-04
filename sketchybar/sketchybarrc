@@ -267,3 +267,8 @@ fi
 ##### Force all scripts to run the first time (never do this in a script) #####
 sketchybar --update
 
+# Apply initial space styling after the config load has fully settled —
+# the --update above doesn't fire the spaces_watcher while the config is
+# still loading, and running it mid-load races the scheme/item setup
+( sleep 1; "$PLUGIN_DIR/space.sh" ) &
+

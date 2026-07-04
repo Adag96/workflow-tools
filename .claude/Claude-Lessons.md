@@ -22,6 +22,13 @@ Each lesson follows this structure:
 - **Root cause**: yabai signals and sketchybar scripts execute with a minimal PATH, so `#!/usr/bin/env bash` resolves to macOS stock `/bin/bash` (3.2, from 2007) even if Homebrew bash is installed. Bash 3.2 lacks `$BASHPID`, associative arrays (`declare -A` — this is also why items/space_brackets.sh:18 errors), `${var,,}`, and other bash 4+ features.
 - **Rule**: In any script this repo's daemons invoke, write for bash 3.2. For a subshell's own PID use `( ... ) & echo $! > pidfile` from the parent (or `$(sh -c 'echo $PPID')` inside), never `$BASHPID`. No `declare -A`. Test features in `/bin/bash` before assuming they work.
 
+### Never let two sketchybar --reload runs overlap
+- **Date**: 2026-07-04
+- **Category**: Sketchybar
+- **What happened**: The reload widget button produced a wrecked bar — items interleaved out of order, pills missing. Its script ran `sketchybar --reload`, restarted yabai, which fired display_watcher, which issued a second `--reload` while the first config load was still executing. Two rc processes interleaved their --add/--reorder calls.
+- **Root cause**: `sketchybar --reload` re-runs the whole rc; nothing serializes concurrent runs, and item order is add-order. Any script chain that can trigger a second reload mid-load corrupts the bar layout.
+- **Rule**: A bar-reload action must only reload the bar (no yabai restarts, no watcher chaining). If a script needs both, restart yabai first, wait for it, then reload the bar exactly once. Note: the bar background is transparent BY DESIGN (`color=0x00000000` in rc) — wallpaper showing through is not a color-loading bug; look at the bracket pills instead.
+
 ### Polling plugins must never outlive their update interval
 - **Date**: 2026-07-03
 - **Category**: Performance

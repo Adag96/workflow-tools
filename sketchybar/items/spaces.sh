@@ -75,14 +75,14 @@ else
 fi
 
 # Single hidden watcher drives styling for ALL space items via one batched
-# script run — replaces the old per-space-item script/subscription fan-out
+# script run — replaces the old per-space-item script/subscription fan-out.
+# (No manual initial run needed: sketchybarrc's final `sketchybar --update`
+# fires this after the whole config has loaded — a manual run here would race
+# the rest of the config load.)
 sketchybar --add item spaces_watcher left \
            --set spaces_watcher drawing=off \
                                 script="$PLUGIN_DIR/space.sh" \
            --subscribe spaces_watcher space_change display_change
-
-# Set initial styling now instead of waiting for the first space change
-"$PLUGIN_DIR/space.sh" &
 
 sketchybar --add item space_separator left \
           --set space_separator icon=">" \

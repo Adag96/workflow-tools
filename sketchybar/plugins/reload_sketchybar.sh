@@ -17,18 +17,9 @@ sketchybar -m --set reload.bar \
               background.drawing=off \
               icon.color=$ICON_COLOR
 
+# Reload the bar only. Restarting yabai here caused a reload storm: the yabai
+# restart fired the display watcher, whose own `sketchybar --reload` ran
+# concurrently with this one — two config loads interleaving left the bar
+# transparent, mis-ordered, and missing pills. Restart yabai via its toggle
+# widget or `yabai --restart-service` when actually needed.
 sketchybar --reload
-yabai --restart-service
-
-# Wait for yabai to be ready, then fix display/space layout
-(
-    for attempt in 1 2 3 4 5 6 7 8 9 10; do
-        if yabai -m query --displays &>/dev/null; then
-            # Clear cooldown so display watcher runs fresh
-            rm -f /tmp/display_watcher.last_run
-            "$HOME/workflow-tools/sketchybar/plugins/display_watcher.sh"
-            break
-        fi
-        sleep 1
-    done
-) &
