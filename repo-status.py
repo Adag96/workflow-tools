@@ -227,21 +227,33 @@ def compute_col_widths(statuses):
 def fetch_all(repos):
     print_header()
     print(f"\n{BLUE}Fetching all repos...{NC}\n")
-    for repo_path, alias, _group in repos:
-        path = os.path.expanduser(repo_path)
-        display = get_display_name(repo_path, alias)
-        if os.path.isdir(os.path.join(path, '.git')):
-            print(f"  {GRAY}Fetching {display}...{NC}", end='', flush=True)
+
+    def fetch_one(path):
+        try:
             result = subprocess.run(
                 ['git', '-C', path, 'fetch', '--quiet'],
                 capture_output=True, timeout=30
             )
-            if result.returncode == 0:
-                print(f"\r  {GREEN}OK{NC} {display}              ")
-            else:
-                print(f"\r  {RED}FAIL{NC} {display}              ")
-        else:
-            print(f"  {RED}FAIL{NC} {display} (not a git repo)")
+            return result.returncode == 0
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+            return False  # Slow/unreachable remote — skip; ahead/behind may be stale.
+
+    targets = [
+        (os.path.expanduser(repo_path), get_display_name(repo_path, alias))
+        for repo_path, alias, _group in repos
+        if os.path.isdir(os.path.join(os.path.expanduser(repo_path), '.git'))
+    ]
+    total = len(targets)
+    done = 0
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(fetch_one, path): display
+                   for path, display in targets}
+        for future in as_completed(futures):
+            done += 1
+            display = futures[future]
+            mark = f"{GREEN}OK{NC}" if future.result() else f"{YELLOW}skip{NC}"
+            print(f"\r  {mark} {CYAN}[{done}/{total}]{NC} {display:<28}", end='', flush=True)
+    print(f"\r  {GREEN}Done{NC} — fetched {total} repos.{' ' * 28}")
     print(f"\n{GRAY}Press any key to continue...{NC}")
     getch()
 
@@ -764,11 +776,16 @@ def main():
     while True:
         if refresh:
             repos = load_repos()
+            # Gather status in parallel — each repo runs 4 local git commands;
+            # serial spawning of 60+ subprocesses is what made refresh feel slow.
             statuses = []
-            for repo_path, alias, group in repos:
-                s = get_repo_status(repo_path, alias, group)
-                if s:
-                    statuses.append(s)
+            with ThreadPoolExecutor(max_workers=8) as pool:
+                futures = [pool.submit(get_repo_status, rp, alias, group)
+                           for rp, alias, group in repos]
+                for future in as_completed(futures):
+                    s = future.result()
+                    if s:
+                        statuses.append(s)
 
             # Sort repos alphabetically within each group, preserving group order
             seen_groups = []
