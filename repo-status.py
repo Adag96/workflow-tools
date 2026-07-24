@@ -4,6 +4,7 @@ import sys
 import tty
 import termios
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Config
 CONFIG_FILE = os.path.expanduser('~/.repo_tracker_repos')
@@ -725,14 +726,38 @@ def main():
             elif key.lower() == 'q':
                 sys.exit()
 
-    # Auto-fetch on launch for accurate ahead/behind info
+    # Auto-fetch on launch for accurate ahead/behind info.
+    # Run in parallel so one slow remote can't freeze the whole tool, and
+    # never let a slow/failed fetch crash the launch (timeouts/errors skipped).
     print_header()
-    print(f"  {BLUE}Fetching latest from remotes...{NC}")
-    for repo_path, alias, _group in repos:
-        path = os.path.expanduser(repo_path)
-        if os.path.isdir(os.path.join(path, '.git')):
+
+    def fetch_one(path):
+        try:
             subprocess.run(['git', '-C', path, 'fetch', '--quiet'],
                           capture_output=True, timeout=15)
+            return True
+        except (subprocess.TimeoutExpired, subprocess.SubprocessError, OSError):
+            return False  # Slow/unreachable remote — skip; ahead/behind may be stale.
+
+    fetch_targets = [
+        (os.path.expanduser(repo_path), alias)
+        for repo_path, alias, _group in repos
+        if os.path.isdir(os.path.join(os.path.expanduser(repo_path), '.git'))
+    ]
+    total = len(fetch_targets)
+    print(f"  {BLUE}Fetching latest from remotes...{NC}\n")
+    done = 0
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        futures = {pool.submit(fetch_one, path): alias
+                   for path, alias in fetch_targets}
+        for future in as_completed(futures):
+            done += 1
+            alias = futures[future]
+            ok = future.result()
+            mark = f"{GREEN}OK{NC}" if ok else f"{YELLOW}skip{NC}"
+            # \r rewrites the same line so the header doesn't scroll away
+            print(f"\r  {mark} {CYAN}[{done}/{total}]{NC} {alias:<28}", end='', flush=True)
+    print(f"\r  {GREEN}Done{NC} — fetched {total} repos.{' ' * 28}")
 
     idx = 0
     refresh = True
