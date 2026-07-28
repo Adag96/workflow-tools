@@ -31,8 +31,20 @@ fi
 LOCK_DIR="/tmp/sketchybar_space_refresh.lock"
 RERUN_FLAG="$LOCK_DIR/rerun"
 if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  touch "$RERUN_FLAG" 2>/dev/null
-  exit 0
+  # Lock held. The trap below only removes it on a clean exit — if a prior run
+  # was hard-killed (yabai restart, sketchybar reload, sleep mid-switch) the
+  # dir is orphaned and would wedge ALL future styling: every run would see the
+  # lock, set rerun, and exit without painting, leaving active-space numbers
+  # black. Reap a lock older than 10s (real updates finish in <1s) instead of
+  # trusting it. Race-safe: whoever wins the re-mkdir proceeds, the loser flags.
+  lock_age=$(( $(date +%s) - $(stat -f %m "$LOCK_DIR" 2>/dev/null || echo 0) ))
+  if [ "$lock_age" -ge 10 ]; then
+    rm -rf "$LOCK_DIR"
+    mkdir "$LOCK_DIR" 2>/dev/null || { touch "$RERUN_FLAG" 2>/dev/null; exit 0; }
+  else
+    touch "$RERUN_FLAG" 2>/dev/null
+    exit 0
+  fi
 fi
 trap 'rm -rf "$LOCK_DIR"' EXIT
 
