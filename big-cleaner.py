@@ -368,11 +368,386 @@ def big_clean_submenu():
             else:
                 results_view(find_files([os.path.expanduser('~')], THRESHOLD_MB, library_dirs=LIBRARY_DIRS_DEEP, hidden=hidden))
 
+# ============================================================================
+# MEMORY HOGS — find and kill heavy / forgotten processes
+# ============================================================================
+import signal
+import getpass
+
+# Never offer to kill these — killing them can hang or crash the session/OS.
+PROTECTED_NAMES = {
+    'WindowServer', 'kernel_task', 'launchd', 'loginwindow', 'Finder',
+    'Dock', 'SystemUIServer', 'coreaudiod', 'cfprefsd', 'distnoted',
+    'mds', 'mds_stores', 'mdworker', 'mdworker_shared', 'mdsync',
+    'SkyLight', 'AppleNeuralEngine', 'hidd', 'powerd', 'bluetoothd',
+    'Terminal', 'iTerm2', 'iTerm', 'ghostty', 'kitty', 'alacritty', 'WezTerm',
+    'tmux', 'tmux: server', 'sshd', 'zsh', 'bash', 'python3', 'Python',
+    'sketchybar', 'yabai',
+}
+
+# Browser processes whose many helpers get rolled into one grouped row.
+BROWSER_PARENTS = {
+    'Brave Browser': 'Brave Browser',
+    'Google Chrome': 'Google Chrome',
+    'Safari': 'Safari',
+    'firefox': 'firefox',
+    'Arc': 'Arc',
+    'Microsoft Edge': 'Microsoft Edge',
+}
+BROWSER_HELPER_HINT = 'Helper'
+
+# Dev-server / local-host process hints (matched against the full command).
+DEV_HINTS = [
+    'node', 'vite', 'webpack', 'next', 'nuxt', 'npm', 'pnpm', 'yarn', 'bun',
+    'deno', 'http.server', 'flask', 'gunicorn', 'uvicorn', 'rails', 'puma',
+    'php -S', 'ngrok', 'webpack-dev-server', 'ng serve', 'astro', 'remix',
+    'esbuild', 'rollup', 'parcel', 'jekyll', 'hugo', 'streamlit',
+]
+
+def print_memory_header():
+    os.system('clear')
+    print(fr"""{GREEN}
+  __  __ _____ __  __  ___  ______   __  _   _  ___   ____ ____
+ |  \/  | ____|  \/  |/ _ \|  _ \ \ / / | | | |/ _ \ / ___/ ___|
+ | |\/| |  _| | |\/| | | | | |_) \ V /  | |_| | | | | |  _\___ \
+ | |  | | |___| |  | | |_| |  _ < | |   |  _  | |_| | |_| |___) |
+ |_|  |_|_____|_|  |_|\___/|_| \_\|_|   |_| |_|\___/ \____|____/
+{NC}         {GREEN}Find and kill heavy / forgotten processes.{NC}
+""")
+
+def current_user():
+    try: return getpass.getuser()
+    except: return os.environ.get('USER', '')
+
+def friendly_name(command, comm):
+    """Best-effort human name for a process from its full command string."""
+    # 1) Prefer the deepest .app bundle name (e.g. "Google Chrome Helper" -> "Google Chrome").
+    apps = re.findall(r'/([^/]+)\.app/', command)
+    if apps:
+        return apps[0]
+    # 2) Framework/XPC services and other bundles -> use the bundle basename without extension.
+    m = re.search(r'/([^/]+)\.(?:framework|xpc|bundle|appex)/', command)
+    if m:
+        return m.group(1)
+    # 3) Otherwise the basename of the executable path (strip leading args).
+    exe = command.split()[0] if command.split() else comm
+    base = os.path.basename(exe)
+    # A bare truncated comm (e.g. "coreau", "bi") is worse than the real basename.
+    if base and base not in ('', '/'):
+        return base
+    return comm or '?'
+
+def memory_pressure_summary():
+    """Return a short human-readable memory / swap status line."""
+    lines = []
+    try:
+        total_bytes = int(subprocess.check_output(['sysctl', '-n', 'hw.memsize']).strip())
+    except:
+        total_bytes = 0
+    try:
+        out = subprocess.check_output(['vm_stat'], text=True)
+        page_size = 4096
+        m = re.search(r'page size of (\d+)', out)
+        if m: page_size = int(m.group(1))
+        stats = {}
+        for line in out.splitlines():
+            mm = re.match(r'"?([\w\s]+?)"?:\s+([\d.]+)\.?', line)
+            if mm: stats[mm.group(1).strip()] = int(float(mm.group(2)))
+        free = (stats.get('Pages free', 0) + stats.get('Pages inactive', 0)) * page_size
+        wired = stats.get('Pages wired down', 0) * page_size
+        compressed = stats.get('Pages occupied by compressor', 0) * page_size
+        if total_bytes:
+            lines.append(f"Total RAM: {format_size(total_bytes)}   "
+                         f"Free-ish: {format_size(free)}   "
+                         f"Wired: {format_size(wired)}   "
+                         f"Compressed: {format_size(compressed)}")
+    except Exception:
+        pass
+    try:
+        # Current swap usage — the real tell for "out of memory" freezes.
+        swap = subprocess.check_output(['sysctl', '-n', 'vm.swapusage'], text=True).strip()
+        lines.append(f"Swap: {swap}")
+    except Exception:
+        pass
+    try:
+        # macOS's own pressure verdict.
+        mp = subprocess.check_output(['memory_pressure', '-Q'], text=True, stderr=subprocess.DEVNULL).strip()
+        mm = re.search(r'System-wide memory free percentage:\s*(\d+)%', mp)
+        if mm: lines.append(f"System memory free: {mm.group(1)}%")
+    except Exception:
+        pass
+    return lines
+
+def scan_processes(group_browsers=True):
+    """Return a list of process dicts sorted by memory. Browsers optionally grouped."""
+    user = current_user()
+    procs = []
+    try:
+        # pid, %cpu, rss(KB), user, elapsed-time, full command.
+        # NOTE: no comm= — ps truncates comm to 15 chars AND glues it to command,
+        # which corrupts the executable path. The full command gives the real path.
+        out = subprocess.check_output(
+            ['ps', '-axo', 'pid=,%cpu=,rss=,user=,etime=,command='],
+            text=True, stderr=subprocess.DEVNULL)
+    except Exception:
+        return []
+    self_pid = os.getpid()
+    ppid_self = os.getppid()
+    for line in out.splitlines():
+        parts = line.split(None, 5)
+        if len(parts) < 6: continue
+        try:
+            pid = int(parts[0]); cpu = float(parts[1]); rss_kb = int(parts[2])
+        except ValueError:
+            continue
+        puser = parts[3]; etime = parts[4]
+        command = parts[5]
+        # Short name = basename of the (untruncated) executable path.
+        comm = os.path.basename(command.split()[0]) if command.split() else command
+        friendly = friendly_name(command, comm)
+        procs.append({
+            'pid': pid, 'cpu': cpu, 'rss': rss_kb * 1024, 'user': puser,
+            'etime': etime, 'command': command, 'comm': comm, 'friendly': friendly,
+        })
+    # Determine killability.
+    def killable(p):
+        if p['pid'] < 500: return False
+        if p['pid'] in (self_pid, ppid_self): return False
+        if p['user'] not in (user, ''): return False  # only our own procs
+        if p['comm'] in PROTECTED_NAMES or p['friendly'] in PROTECTED_NAMES: return False
+        return True
+
+    if group_browsers:
+        grouped = {}
+        singles = []
+        for p in procs:
+            parent = None
+            for key, label in BROWSER_PARENTS.items():
+                # Only group genuine browser processes: the friendly name is exactly
+                # the browser (resolved from its .app bundle), or the command runs out
+                # of that browser's .app bundle. A bare substring match wrongly sweeps
+                # in unrelated XPC helpers (e.g. SafariPlatformSupport) for apps that
+                # aren't even running.
+                if p['friendly'] == key or f'/{key}.app/' in p['command']:
+                    parent = label; break
+            if parent:
+                g = grouped.setdefault(parent, {
+                    'friendly': parent, 'comm': parent, 'rss': 0, 'cpu': 0.0,
+                    'pids': [], 'user': p['user'], 'etime': p['etime'],
+                    'command': parent, 'is_group': True,
+                })
+                g['rss'] += p['rss']; g['cpu'] += p['cpu']; g['pids'].append(p['pid'])
+            else:
+                p['pids'] = [p['pid']]; p['is_group'] = False
+                singles.append(p)
+        result = list(grouped.values()) + singles
+        for g in grouped.values():
+            g['killable'] = all(pid >= 500 for pid in g['pids']) and g['user'] in (user, '')
+        for s in singles:
+            s['killable'] = killable(s)
+    else:
+        result = procs
+        for p in result:
+            p['pids'] = [p['pid']]; p['is_group'] = False; p['killable'] = killable(p)
+
+    result.sort(key=lambda x: x['rss'], reverse=True)
+    return result
+
+def scan_dev_servers():
+    """Return dev-server processes that are LISTENING on a TCP port."""
+    user = current_user()
+    self_pid = os.getpid()
+    listeners = {}  # pid -> set of ports
+    try:
+        out = subprocess.check_output(
+            ['lsof', '-nP', '-iTCP', '-sTCP:LISTEN'],
+            text=True, stderr=subprocess.DEVNULL)
+    except Exception:
+        return []
+    for line in out.splitlines()[1:]:
+        cols = line.split()
+        if len(cols) < 9: continue
+        try: pid = int(cols[1])
+        except ValueError: continue
+        addr = cols[-2] if cols[-1] == '(LISTEN)' else cols[-1]
+        pm = re.search(r':(\d+)$', addr)
+        if pm: listeners.setdefault(pid, set()).add(pm.group(1))
+    if not listeners: return []
+    servers = []
+    for p in scan_processes(group_browsers=False):
+        if p['pid'] not in listeners: continue
+        cmd = p['command']
+        if not any(h in cmd for h in DEV_HINTS): continue
+        cwd = ''
+        try:
+            cwd_out = subprocess.check_output(
+                ['lsof', '-a', '-p', str(p['pid']), '-d', 'cwd', '-Fn'],
+                text=True, stderr=subprocess.DEVNULL)
+            for l in cwd_out.splitlines():
+                if l.startswith('n'): cwd = l[1:]; break
+        except Exception:
+            pass
+        p['ports'] = sorted(listeners[p['pid']], key=lambda x: int(x))
+        p['cwd'] = cwd
+        p['killable'] = p['pid'] not in (self_pid, os.getppid()) and p['user'] in (user, '')
+        servers.append(p)
+    servers.sort(key=lambda x: int(x['ports'][0]) if x['ports'] else 0)
+    return servers
+
+def kill_pids(pids, label):
+    """SIGTERM the pids; if any survive after a grace period, offer SIGKILL. Returns True if all gone."""
+    for pid in pids:
+        try: os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError: pass
+        except PermissionError: pass
+    time.sleep(2)
+    survivors = []
+    for pid in pids:
+        try: os.kill(pid, 0); survivors.append(pid)
+        except OSError: pass
+    if not survivors:
+        return True
+    print(f"\n{YELLOW}{len(survivors)} process(es) of {label} ignored SIGTERM. Force-kill (SIGKILL)? (y/n){NC} ",
+          end='', flush=True)
+    if getch().lower() == 'y':
+        for pid in survivors:
+            try: os.kill(pid, signal.SIGKILL)
+            except OSError: pass
+        return True
+    return False
+
+def process_results_view(procs, mode):
+    """Interactive kill view. mode: 'hogs' or 'dev'."""
+    if not procs:
+        print(f"\n✔ Nothing found."); getch(); return
+    idx = 0
+    selected = set()
+    while True:
+        print_memory_header()
+        if mode == 'hogs':
+            for l in memory_pressure_summary():
+                print(f"  {GRAY}{l}{NC}")
+            print()
+        visible = os.get_terminal_size().lines - (18 if mode == 'hogs' else 13)
+        visible = max(visible, 5)
+        half = visible // 2
+        start = max(0, min(idx - half, len(procs) - visible))
+        end = min(len(procs), start + visible)
+        term_width = os.get_terminal_size().columns
+
+        # Column layout (widths shared by header + rows so they line up).
+        NAME_W, SIZE_W, CPU_W, PROC_W = 26, 10, 8, 6
+        if mode == 'hogs':
+            header = (f"  {BOLD}{'PROCESS':<{NAME_W}} {'MEMORY':>{SIZE_W}}  {'CPU':>{CPU_W}}  "
+                      f"{'PROCS':>{PROC_W}}{NC}")
+        else:
+            header = (f"  {BOLD}{'PORT':<8} {'PROCESS':<12} {'MEMORY':>{SIZE_W}}  {'DIRECTORY'}{NC}")
+        print(header)
+        print(f"{BLUE}{'─' * min(term_width, 90)}{ENDC}")
+
+        for i in range(start, end):
+            p = procs[i]
+            is_selected = i in selected
+            can_kill = p.get('killable', False)
+            if i == idx:
+                marker = f"{PINK}➤ " if not is_selected else f"{YELLOW}◉ "
+                color = PINK if not is_selected else YELLOW
+            else:
+                marker = "  " if not is_selected else f"{YELLOW}● {ENDC}"
+                color = ENDC if not is_selected else YELLOW
+            rss = format_size(p['rss'])
+            lock = f"  {GRAY}🔒{ENDC}" if not can_kill else ""
+            if mode == 'hogs':
+                grp = f"×{len(p['pids'])}" if p.get('is_group') and len(p['pids']) > 1 else ""
+                name = p['friendly']
+                if len(name) > NAME_W: name = name[:NAME_W - 1] + '…'
+                print(f"{marker}{color}{name:<{NAME_W}} {rss:>{SIZE_W}}  "
+                      f"{p['cpu']:>{CPU_W - 2}.1f}%  {GRAY}{grp:>{PROC_W}}{ENDC}{lock}")
+            else:
+                ports = ','.join(p.get('ports', [])) or '?'
+                cwd = p.get('cwd', '').replace(os.path.expanduser('~'), '~')
+                name = p['friendly']
+                if len(name) > 12: name = name[:11] + '…'
+                prefix_len = 2 + 8 + 13 + SIZE_W + 4
+                max_cwd = max(10, term_width - prefix_len)
+                if len(cwd) > max_cwd:
+                    cwd = '…' + cwd[-(max_cwd - 1):]
+                print(f"{marker}{color}:{ports:<7} {name:<12} {rss:>{SIZE_W}}{ENDC}  "
+                      f"{GRAY}{cwd}{ENDC}{lock}")
+        print(f"\n{BLUE}{'─' * min(term_width, 90)}{ENDC}")
+        sel_info = (f"  {YELLOW}{len(selected)} selected ({format_size(sum(procs[i]['rss'] for i in selected))}){ENDC}"
+                    if selected else "")
+        print(f"{GREY}↑ ↓   |   S Select   |   K Kill   |   O Activity Monitor   |   Q Back   |   "
+              f"{idx + 1} of {len(procs)}{ENDC}{sel_info}")
+        key = getch()
+        if key == '\x1b[A': idx = (idx - 1) % len(procs)
+        elif key == '\x1b[B': idx = (idx + 1) % len(procs)
+        elif key.lower() == 'q': return
+        elif key.lower() == 's':
+            if not procs[idx].get('killable', False): continue
+            if idx in selected: selected.discard(idx)
+            else: selected.add(idx)
+        elif key.lower() == 'o':
+            subprocess.run(['open', '-a', 'Activity Monitor'])
+        elif key.lower() == 'k':
+            targets = sorted(selected) if selected else [idx]
+            targets = [i for i in targets if procs[i].get('killable', False)]
+            if not targets:
+                print(f"\n{GRAY}Nothing killable selected (protected process).{NC} ", end='', flush=True)
+                getch(); continue
+            count = len(targets)
+            total_rss = sum(procs[i]['rss'] for i in targets)
+            names = ', '.join(procs[i]['friendly'] for i in targets[:3]) + ('…' if count > 3 else '')
+            print(f"\n{YELLOW}Kill {count} process group(s) — {names} ({format_size(total_rss)})? (y/n){NC} ",
+                  end='', flush=True)
+            if getch().lower() != 'y': continue
+            for i in sorted(targets, reverse=True):
+                p = procs[i]
+                if kill_pids(p['pids'], p['friendly']):
+                    procs.pop(i)
+            selected.clear()
+            idx = min(idx, len(procs) - 1) if procs else 0
+            if not procs: return
+
+def memory_hogs_submenu():
+    idx = 0
+    options = [
+        ("Resource Hogs", "Biggest RAM / CPU consumers right now"),
+        ("Dev Servers", "Local-host servers listening on a port"),
+        ("Mem Pressure", "macOS RAM / swap health readout"),
+    ]
+    while True:
+        print_memory_header()
+        for i, (name, desc) in enumerate(options):
+            show_menu_option(i + 1, name, desc, i == idx)
+        print(f"\n{GRAY}↑↓   |   Enter   |   Q Back{NC}")
+        key = getch()
+        if key == '\x1b[A': idx = (idx - 1) % len(options)
+        elif key == '\x1b[B': idx = (idx + 1) % len(options)
+        elif key.lower() == 'q': return
+        elif key in ('\r', '\n'):
+            if idx == 0:
+                print(f"\n{BLUE}Scanning processes...{ENDC}")
+                process_results_view(scan_processes(group_browsers=True), 'hogs')
+            elif idx == 1:
+                print(f"\n{BLUE}Scanning listening ports...{ENDC}")
+                process_results_view(scan_dev_servers(), 'dev')
+            else:
+                print_memory_header()
+                lines = memory_pressure_summary()
+                if not lines:
+                    print(f"  {GRAY}Could not read memory stats.{NC}")
+                for l in lines:
+                    print(f"  {CYAN}{l}{NC}")
+                print(f"\n{GRAY}Q Back{NC}")
+                while getch().lower() != 'q': pass
+
 def main():
     load_config()
     options = [
         ("Mole", "Automatic system cleanup"),
         ("Big Clean", "Find and remove oversized files"),
+        ("Memory Hogs", "Find and kill heavy / forgotten processes"),
     ]
     idx = 0
     while True:
@@ -386,7 +761,8 @@ def main():
         elif key.lower() == 'q': sys.exit()
         elif key in ('\r', '\n'):
             if idx == 0: os.system(MOLE_PATH)
-            else: big_clean_submenu()
+            elif idx == 1: big_clean_submenu()
+            else: memory_hogs_submenu()
 
 if __name__ == "__main__":
     main()
