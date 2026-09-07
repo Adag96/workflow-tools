@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Config
 CONFIG_FILE = os.path.expanduser('~/.repo_tracker_repos')
 DISCOVER_DIR = os.path.expanduser('~/Developer')
+GROUPS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'groups.conf')
 
 # ANSI Color Codes (matching big-cleaner style)
 GREEN = '\033[0;32m'
@@ -46,6 +47,18 @@ def print_header():
   {PINK}|_| \\_\\_____|_|    \\___/  {CYAN}|____/ |_/_/   \\_\\_|
 {NC}         {GREEN}Git repository status dashboard.{NC}
 """)
+
+
+def load_group_order():
+    """Canonical group order from groups.conf (tracked in git, same on every machine)."""
+    order = []
+    if os.path.exists(GROUPS_FILE):
+        with open(GROUPS_FILE, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if line and not line.startswith('#') and line not in order:
+                    order.append(line)
+    return order
 
 
 def load_repos():
@@ -787,8 +800,10 @@ def main():
                     if s:
                         statuses.append(s)
 
-            # Sort repos alphabetically within each group, preserving group order
-            seen_groups = []
+            # Sort repos alphabetically within each group, using the canonical
+            # group order from groups.conf; unlisted groups follow, in
+            # first-appearance order.
+            seen_groups = load_group_order()
             for s in statuses:
                 g = s.get('group', '') or ''
                 if g not in seen_groups:
