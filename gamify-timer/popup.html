@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gamify Timer</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Header -->
+    <header>
+      <div class="header-left">
+        <h1>Gamify Timer</h1>
+        <button id="theme-toggle" class="theme-toggle" title="Toggle theme"></button>
+      </div>
+      <div id="balance-display">
+        <span id="balance-amount">0</span>
+        <span class="fc-label">FC</span>
+      </div>
+    </header>
+
+    <!-- Tab Navigation -->
+    <nav id="tabs">
+      <button class="tab active" data-tab="timer">Timer</button>
+      <button class="tab" data-tab="rewards">Rewards</button>
+      <button class="tab" data-tab="history">History</button>
+      <button class="tab" data-tab="settings">Settings</button>
+    </nav>
+
+    <!-- Timer Tab -->
+    <section id="tab-timer" class="tab-content active">
+      <div id="timer-display">
+        <div id="timer-ring">
+          <svg viewBox="0 0 200 200">
+            <circle class="ring-bg" cx="100" cy="100" r="90" />
+            <circle id="ring-progress" class="ring-fill" cx="100" cy="100" r="90" />
+          </svg>
+          <div id="timer-text">
+            <span id="timer-minutes">25</span>:<span id="timer-seconds">00</span>
+          </div>
+        </div>
+        <div id="timer-label">Ready to focus</div>
+        <div id="credit-preview"></div>
+      </div>
+
+      <div id="tag-selector"></div>
+
+      <div id="session-lengths">
+        <button class="length-btn" data-minutes="10">10m</button>
+        <button class="length-btn" data-minutes="15">15m</button>
+        <button class="length-btn" data-minutes="20">20m</button>
+        <button class="length-btn active" data-minutes="25">25m</button>
+        <button class="length-btn" data-minutes="30">30m</button>
+        <button class="length-btn" data-minutes="45">45m</button>
+        <button class="length-btn" data-minutes="60">60m</button>
+      </div>
+
+      <div id="timer-controls">
+        <button id="btn-start" class="primary-btn">Start Focus</button>
+        <button id="btn-pause" class="primary-btn hidden">Pause</button>
+        <button id="btn-resume" class="primary-btn hidden">Resume</button>
+        <button id="btn-cancel" class="secondary-btn hidden">Cancel</button>
+      </div>
+
+      <div id="streak-display"></div>
+    </section>
+
+    <!-- Rewards Tab -->
+    <section id="tab-rewards" class="tab-content">
+      <div id="rewards-balance">
+        Balance: <span class="rewards-balance-amount">0</span> FC
+      </div>
+      <div id="rewards-list"></div>
+      <div class="rewards-actions-row">
+        <button id="btn-add-reward" class="secondary-btn">+ Add Custom Reward</button>
+        <button id="btn-log-reward" class="primary-btn">Log Past Reward</button>
+      </div>
+
+      <!-- Log Reward Overlay -->
+      <div id="log-reward-overlay" class="hidden">
+        <div class="log-reward-display">
+          <h3>Log Past Reward</h3>
+          <select id="log-reward-select"></select>
+          <div id="log-reward-minutes-row" class="hidden">
+            <input type="number" id="log-reward-minutes" placeholder="Minutes" min="1">
+          </div>
+          <div class="log-reward-datetime">
+            <input type="date" id="log-reward-date">
+            <input type="time" id="log-reward-time">
+          </div>
+          <div class="log-reward-cost">Cost: <span id="log-reward-cost-display">0</span> FC</div>
+          <div class="modal-actions">
+            <button id="btn-log-submit" class="primary-btn">Submit</button>
+            <button id="btn-log-cancel" class="secondary-btn">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timed Reward Choice -->
+      <div id="timed-choice" class="hidden">
+        <div class="timed-choice-display">
+          <div class="timed-choice-name"></div>
+          <div class="timed-choice-info"></div>
+          <div class="timed-choice-buttons">
+            <button id="btn-timed-start" class="primary-btn">Start Timer</button>
+            <button id="btn-timed-manual" class="secondary-btn">Redeem Minutes</button>
+          </div>
+          <button id="btn-timed-cancel" class="text-btn">Cancel</button>
+        </div>
+      </div>
+
+      <!-- Timed Spend Overlay -->
+      <div id="spend-timer" class="hidden">
+        <div class="spend-timer-display">
+          <div class="spend-timer-name"></div>
+          <div class="spend-timer-clock">0:00</div>
+          <div class="spend-timer-cost">0 FC spent</div>
+          <div class="spend-timer-limit"></div>
+          <div class="spend-timer-controls">
+            <button id="btn-spend-stop" class="danger-btn">Stop</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add/Edit Reward Modal -->
+      <div id="reward-modal" class="modal hidden">
+        <div class="modal-content">
+          <h3 id="modal-title">Add Reward</h3>
+          <input type="text" id="reward-name" placeholder="Reward name">
+          <input type="text" id="reward-emoji" placeholder="Emoji" maxlength="2">
+          <div class="reward-mode-toggle">
+            <button class="mode-btn active" data-mode="fixed">Fixed cost</button>
+            <button class="mode-btn" data-mode="timed">Per minute</button>
+          </div>
+          <div class="reward-cost-row">
+            <input type="number" id="reward-cost" placeholder="Cost (FC)" min="1">
+            <span id="reward-cost-label">FC</span>
+          </div>
+          <select id="reward-tier">
+            <option value="1">Tier 1 — Small</option>
+            <option value="2">Tier 2 — Medium</option>
+            <option value="3">Tier 3 — Big</option>
+            <option value="4">Tier 4 — Nuclear</option>
+          </select>
+          <label class="toggle-label" style="margin-top:6px;font-size:12px;">
+            <span>Consecutive day penalty (+10%/day)</span>
+            <input type="checkbox" id="reward-escalation">
+          </label>
+          <div class="modal-actions">
+            <button id="btn-save-reward" class="primary-btn">Save</button>
+            <button id="btn-cancel-reward" class="secondary-btn">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- History Tab -->
+    <section id="tab-history" class="tab-content">
+      <div id="history-stats">
+        <div class="stat">
+          <span class="stat-value" id="stat-today-earned">0</span>
+          <span class="stat-label">Earned Today</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="stat-today-spent">0</span>
+          <span class="stat-label">Spent Today</span>
+        </div>
+        <div class="stat">
+          <span class="stat-value" id="stat-total-earned">0</span>
+          <span class="stat-label">All Time Earned</span>
+        </div>
+      </div>
+      <div id="history-view-toggle">
+        <button class="history-view-btn active" data-view="list" title="List view">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+            <rect x="0" y="1" width="14" height="2" rx="1"/>
+            <rect x="0" y="6" width="14" height="2" rx="1"/>
+            <rect x="0" y="11" width="14" height="2" rx="1"/>
+          </svg>
+        </button>
+        <button class="history-view-btn" data-view="chart" title="Chart view">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor">
+            <rect x="1" y="8" width="3" height="6" rx="1"/>
+            <rect x="5.5" y="4" width="3" height="10" rx="1"/>
+            <rect x="10" y="0" width="3" height="14" rx="1"/>
+          </svg>
+        </button>
+      </div>
+      <div id="history-chart" style="display:none;">
+        <div id="chart-nav">
+          <button id="chart-prev" class="chart-nav-btn" title="Older">&#9664;</button>
+          <span id="chart-date-range"></span>
+          <button id="chart-next" class="chart-nav-btn" title="Newer">&#9654;</button>
+        </div>
+        <div id="chart-bars"></div>
+        <div class="chart-legend">
+          <span><span class="chart-legend-dot earned"></span>Earned</span>
+          <span><span class="chart-legend-dot spent"></span>Spent</span>
+        </div>
+      </div>
+      <div id="history-list"></div>
+
+      <!-- Edit Spend Modal -->
+      <div id="edit-spend-modal" class="modal hidden">
+        <div class="modal-content">
+          <h3 id="edit-spend-title">Edit Reward</h3>
+          <label class="edit-spend-label">
+            When
+            <div class="edit-spend-datetime">
+              <input type="date" id="edit-spend-date">
+              <input type="time" id="edit-spend-time">
+            </div>
+          </label>
+          <label id="edit-spend-duration-row" class="edit-spend-label hidden">
+            Duration (minutes)
+            <input type="number" id="edit-spend-duration" min="1">
+            <span class="edit-spend-cost-preview"></span>
+          </label>
+          <div class="modal-actions">
+            <button id="btn-edit-spend-save" class="primary-btn">Save</button>
+            <button id="btn-edit-spend-cancel" class="secondary-btn">Cancel</button>
+          </div>
+          <button id="btn-edit-spend-delete" class="danger-btn" style="width:100%;margin-top:8px;">Delete Entry</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Settings Tab -->
+    <section id="tab-settings" class="tab-content">
+      <div class="setting-group">
+        <h3>Timer Defaults</h3>
+        <label>
+          Default focus (min)
+          <input type="number" id="setting-focus" min="5" max="120">
+        </label>
+        <label>
+          Short rest (min)
+          <input type="number" id="setting-rest" min="1" max="30">
+        </label>
+        <label>
+          Long rest (min)
+          <input type="number" id="setting-long-rest" min="5" max="60">
+        </label>
+        <label>
+          Sessions before long rest
+          <input type="number" id="setting-sessions-long" min="2" max="10">
+        </label>
+        <label>
+          Max pause before penalty
+          <div class="pause-percent-row">
+            <input type="number" id="setting-max-pause" min="0" max="100" step="5">
+            <span>%</span>
+          </div>
+        </label>
+      </div>
+
+      <div class="setting-group">
+        <h3>Credit Formula</h3>
+        <p class="setting-hint">FC = floor(min x (min + 15) / 50)</p>
+        <div id="credit-table">
+          <div class="credit-row"><span>10 min</span><span>5 FC</span></div>
+          <div class="credit-row"><span>15 min</span><span>9 FC</span></div>
+          <div class="credit-row"><span>20 min</span><span>14 FC</span></div>
+          <div class="credit-row"><span>25 min</span><span>20 FC</span></div>
+          <div class="credit-row"><span>30 min</span><span>27 FC</span></div>
+          <div class="credit-row"><span>45 min</span><span>54 FC</span></div>
+          <div class="credit-row"><span>60 min</span><span>90 FC</span></div>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <h3>Sound</h3>
+        <label>
+          Volume
+          <div class="volume-row">
+            <input type="range" id="setting-volume" min="0" max="100" step="5">
+            <span id="volume-value">70%</span>
+          </div>
+        </label>
+        <label>
+          Focus complete
+          <select id="setting-focus-sound">
+            <option value="focus-complete.wav">Chime (C-E-G)</option>
+            <option value="bell.wav">Bell</option>
+            <option value="alert.wav">Alert</option>
+            <option value="rest-complete.wav">Soft chime</option>
+          </select>
+        </label>
+        <label>
+          Rest complete
+          <select id="setting-rest-sound">
+            <option value="rest-complete.wav">Soft chime</option>
+            <option value="bell.wav">Bell</option>
+            <option value="alert.wav">Alert</option>
+            <option value="focus-complete.wav">Chime (C-E-G)</option>
+          </select>
+        </label>
+        <div class="test-sound-row">
+          <button id="btn-test-focus" class="secondary-btn">Test Focus</button>
+          <button id="btn-test-rest" class="secondary-btn">Test Rest</button>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label class="toggle-label">
+          <span>Allow debt (go negative)</span>
+          <input type="checkbox" id="setting-debt">
+        </label>
+      </div>
+
+      <div class="setting-group">
+        <h3>Tags</h3>
+        <div id="tags-list"></div>
+        <div id="tag-add-row">
+          <input type="color" id="new-tag-color" value="#6C5CE7" title="Tag color">
+          <input type="text" id="new-tag-name" placeholder="New tag name">
+          <button id="btn-add-tag" class="secondary-btn">Add</button>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <h3>Data</h3>
+        <button id="btn-export" class="secondary-btn">Export Data</button>
+        <button id="btn-reset-config" class="secondary-btn">Reset Config (keep credits &amp; history)</button>
+        <button id="btn-reset-all" class="danger-btn">Reset Everything</button>
+      </div>
+    </section>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

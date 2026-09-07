@@ -212,7 +212,6 @@ source $ITEM_DIR/volume.sh
 source $ITEM_DIR/cpu.sh
 source $ITEM_DIR/battery.sh
 source $ITEM_DIR/media.sh
-# source $ITEM_DIR/todo.sh  # Disabled — widget de-synced; data preserved
 
 # Initialize the Yabai status file to match current state
 if pgrep -q "yabai"; then
