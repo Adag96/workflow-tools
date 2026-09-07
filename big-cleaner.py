@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import shutil
 import subprocess
 import sys
 import tty
@@ -11,7 +12,7 @@ from collections import defaultdict
 # Paths
 CONFIG_FILE = os.path.expanduser('~/.big_clean_threshold')
 HIDDEN_FILE = os.path.expanduser('~/.big_clean_hidden')
-MOLE_PATH = '/usr/local/bin/mo'
+MOLE_PATH = shutil.which('mo') or shutil.which('mole') or '/usr/local/bin/mo'
 
 # ANSI Color Codes (matching Mole's style)
 GREEN = '\033[0;32m'
