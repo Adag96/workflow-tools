@@ -1,30 +1,17 @@
 #!/bin/bash
+# Draws the yabai on/off icon from the real launchd service state.
+# No status file: launchd is the same source of truth --start/--stop-service use,
+# and it only sees the daemon, never transient `yabai -m` client processes.
 
-source "$HOME/.config/sketchybar/items/scheme.sh"
+CONFIG_DIR="${CONFIG_DIR:-$HOME/.config/sketchybar}"
+source "$CONFIG_DIR/items/scheme.sh"
+source "$CONFIG_DIR/icons.sh"
 get_colors "$(cat "$HOME/.cache/sketchybar/current_scheme")"
 
-STATUS_FILE="/tmp/yabai_status"
-
-# Define icons directly in this script
-RUNNING_ICON="􀷄"   
-STOPPED_ICON="􀷃" 
-
-# If status file doesn't exist, create it
-if [ ! -f "$STATUS_FILE" ]; then
-  # Check if yabai is actually running
-  if pgrep -q yabai; then
-    echo "running" > "$STATUS_FILE"
-  else
-    echo "stopped" > "$STATUS_FILE"
-  fi
-fi
-
-# Read the status
-CURRENT_STATUS=$(cat "$STATUS_FILE")
-
-# Set icon based on status
-if [ "$CURRENT_STATUS" = "running" ]; then
-  sketchybar --set $NAME icon="$RUNNING_ICON" icon.color=$RIGHT_TEXT_COLOR
+if launchctl print "gui/$(id -u)/com.koekeishiya.yabai" >/dev/null 2>&1; then
+  ICON="$YABAI_RUNNING_ICON"
 else
-  sketchybar --set $NAME icon="$STOPPED_ICON" icon.color=$RIGHT_TEXT_COLOR
+  ICON="$YABAI_STOPPED_ICON"
 fi
+
+sketchybar --set "${NAME:-yabai.toggle}" icon="$ICON" icon.color=$RIGHT_TEXT_COLOR

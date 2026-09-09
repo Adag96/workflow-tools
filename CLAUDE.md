@@ -20,7 +20,7 @@ echo "adam ALL=(root) NOPASSWD: sha256:$(shasum -a 256 /opt/homebrew/bin/yabai |
 ```
 
 ### Debug Logs
-- Yabai status: `/tmp/yabai_status`
+- Yabai daemon: `/tmp/yabai_$USER.err.log` (on/off state comes from `launchctl print gui/$(id -u)/com.koekeishiya.yabai`)
 - Display watcher: `/tmp/display_watcher.log`
 
 ### Dependencies

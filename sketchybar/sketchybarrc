@@ -213,14 +213,6 @@ source $ITEM_DIR/cpu.sh
 source $ITEM_DIR/battery.sh
 source $ITEM_DIR/media.sh
 
-# Initialize the Yabai status file to match current state
-if pgrep -q "yabai"; then
-  echo "running" > /tmp/yabai_status
-else
-  echo "stopped" > /tmp/yabai_status
-  sketchybar --set yabai.toggle icon="$YABAI_STOPPED_ICON" icon.color=0xFFE06C75
-fi
-
 # Dynamic space brackets (handles any number of spaces across displays)
 source $ITEM_DIR/space_brackets.sh
 

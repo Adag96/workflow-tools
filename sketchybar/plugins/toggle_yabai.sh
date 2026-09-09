@@ -1,47 +1,12 @@
 #!/bin/bash
+# Enable/disable yabai. Decides from the live launchd state, not a cached file,
+# so one click always does the opposite of what yabai is actually doing.
 
-# Source the icons file to ensure we have access to the icon variables
-source "$HOME/.config/sketchybar/icons.sh"
-
-# File to track Yabai status
-STATUS_FILE="/tmp/yabai_status"
-
-# Check if status file exists, create it if not (default to running)
-if [ ! -f "$STATUS_FILE" ]; then
-  echo "running" > "$STATUS_FILE"
-fi
-
-# Read current status
-CURRENT_STATUS=$(cat "$STATUS_FILE")
-
-# Toggle based on current status
-# Instead of using variables, we'll use direct sketchybar property commands
-if [ "$CURRENT_STATUS" = "running" ]; then
-  # Stop Yabai
+if launchctl print "gui/$(id -u)/com.koekeishiya.yabai" >/dev/null 2>&1; then
   yabai --stop-service
-  
-  # Update status
-  echo "stopped" > "$STATUS_FILE"
-  
-  # Just set the icon properties directly
-  sketchybar --set yabai.toggle icon.color=0xFFE06C75 label="Stopped" icon.drawing=off
-  # Then set the icon separately
-  sketchybar --set yabai.toggle icon.drawing=on
-  
-  # Clear label after 2 seconds
-  (sleep 2 && sketchybar --set yabai.toggle label.drawing=off) &
 else
-  # Start Yabai
   yabai --start-service
-  
-  # Update status
-  echo "running" > "$STATUS_FILE"
-  
-  # Just set the icon properties directly
-  sketchybar --set yabai.toggle icon.color=0xFF98C379 label="Running" icon.drawing=off
-  # Then set the icon separately
-  sketchybar --set yabai.toggle icon.drawing=on
-  
-  # Clear label after 2 seconds
-  (sleep 2 && sketchybar --set yabai.toggle label.drawing=off) &
 fi
+
+# Redraw the icon from the new state
+NAME="${NAME:-yabai.toggle}" "$HOME/.config/sketchybar/plugins/yabai_state_display.sh"

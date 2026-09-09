@@ -36,7 +36,9 @@ yabai -m config mouse_drop_action swap
 # Disable specific apps
 yabai -m rule --add app='^System Settings$' manage=off
 yabai -m rule --add app='^Calculator$' manage=off
-yabai -m signal --add event=window_created app="^Blitzit$" action='yabai -m window $YABAI_WINDOW_ID --toggle float'
+# Fixed-size windows that can't be resized — tiling them breaks the bsp layout
+yabai -m rule --add app='^Blitzit$' manage=off
+yabai -m rule --add app='^UAD Meter & Control Panel$' manage=off
 
 # Force-manage apps with non-standard accessibility roles
 yabai -m rule --add app="^Adobe Premiere" manage=on
