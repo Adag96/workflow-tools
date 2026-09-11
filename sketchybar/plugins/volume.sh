@@ -43,7 +43,10 @@ volume_change() {
   fi
 }
 
-# Routine update: poll actual system volume to catch changes from SoundSource etc.
+# Routine update: one-time sync at load plus a 5-minute safety net. Live changes
+# arrive via the volume_change event (sketchybar holds a persistent CoreAudio
+# listener). Each osascript spawns a new CoreAudio client, and polling every
+# 10s helped degrade coreaudiod over multi-day uptimes (Sept 2026).
 routine_update() {
   # osascript can hang indefinitely if Apple Events stall; alarm-kill after 5s
   # so instances can't pile up across ticks (same failure class as the cpu.sh incident)
