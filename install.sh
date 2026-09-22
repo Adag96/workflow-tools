@@ -25,6 +25,24 @@ else
   ln -s "$WORKFLOW_TOOLS_PATH/sketchybar" "$SKETCHYBAR_CONFIG_PATH"
 fi
 
+# Shell configuration — back up any pre-existing real file before symlinking.
+# These are shared across machines; anything machine-specific belongs in
+# ~/.zshrc.local, which is gitignored and sourced at the end of .zshrc.
+for rcfile in .zshrc .p10k.zsh .condarc; do
+  target="$HOME/$rcfile"
+  source_file="$WORKFLOW_TOOLS_PATH/shell/$rcfile"
+  if [ "$(readlink "$target")" = "$source_file" ]; then
+    echo "$rcfile already linked"
+    continue
+  fi
+  if [ -e "$target" ] || [ -L "$target" ]; then
+    mv "$target" "$target.bak.$(date +%s)"
+    echo "Backed up existing $rcfile"
+  fi
+  ln -sf "$source_file" "$target"
+  echo "Linked $rcfile"
+done
+
 # Initialize Yabai status file
 if pgrep -q yabai; then
   echo "running" > /tmp/yabai_status

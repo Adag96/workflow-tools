@@ -7,3 +7,7 @@
 gamify-timer/data.json
 gamify-timer/data.json.*
 gamify-timer/.claude/settings.local.json
+
+# Shell — machine-specific overrides and backups, never shared
+shell/.zshrc.local
+shell/*.bak.*
