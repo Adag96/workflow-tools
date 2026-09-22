@@ -1,0 +1,12 @@
+# Machine-specific shell settings — NOT shared between machines.
+#
+# Copy this file to ~/.zshrc.local on any machine that needs settings the
+# other machines shouldn't get. The shared .zshrc sources it last, so
+# anything here overrides what came from the repo.
+#
+#   cp ~/workflow-tools/shell/.zshrc.local.example ~/.zshrc.local
+#
+# Examples:
+#   export PATH="/some/machine/only/path:$PATH"
+#   export SOME_API_KEY="..."          # keys never belong in the shared repo
+#   alias work="cd ~/work-projects"

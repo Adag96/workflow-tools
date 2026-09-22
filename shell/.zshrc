@@ -161,6 +161,28 @@ add-zsh-hook chpwd _venv_reminder
 _venv_reminder
 # -----------------------------------------------------------------------------
 
+# --- workflow-tools link check -----------------------------------------------
+# This file is shared via the workflow-tools repo. If you're reading it on a
+# machine where install.sh hasn't been run since new configs were added, some
+# symlinks won't exist yet — so the check lives in the shared file itself and
+# travels to every machine on the next `git pull`.
+_workflow_tools_check() {
+  local repo=$HOME/workflow-tools
+  [[ -d $repo ]] || return          # repo not on this machine; nothing to say
+
+  local f missing=()
+  for f in .zshrc .p10k.zsh .condarc; do
+    [[ $(readlink $HOME/$f) == $repo/shell/$f ]] || missing+=($f)
+  done
+  (( $#missing )) || return         # all linked; stay quiet
+
+  print -P "%F{yellow}⚠  workflow-tools configs not linked on this machine%f"
+  print -P "%F{244}   missing: ${missing}%f"
+  print -P "%F{244}   run: %f%F{cyan}~/workflow-tools/install.sh%f"
+}
+_workflow_tools_check
+# -----------------------------------------------------------------------------
+
 # --- machine-specific overrides ----------------------------------------------
 # This file is shared between machines via the workflow-tools repo.
 # Anything that should NOT be shared (machine-only PATH entries, API keys,
