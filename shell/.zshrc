@@ -134,6 +134,7 @@ unset __conda_setup
 export PATH="$HOME/.local/bin:$PATH"
 alias clean="$HOME/workflow-tools/big-cleaner.py"
 alias repo="$HOME/workflow-tools/repo-status.py"
+alias transcribe="$HOME/Developer/Lonebody-Tools/Sources/LonebodyTools/Tools/AudioTranscription/Core/transcribe_audio.py"
 
 # --- venv reminder -----------------------------------------------------------
 # Warns when you cd into a directory that has a virtual environment which isn't

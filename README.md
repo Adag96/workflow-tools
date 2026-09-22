@@ -14,3 +14,4 @@ TOOLS:
 - Yabai: window tiling management
 - Sketchybar: status bar customization
 - Big Cleaner: TUI for finding and removing large/unnecessary files (aliased as `clean` in .zshrc)
+- Transcribe: MLX/GPU audio + video transcription (aliased as `transcribe` in .zshrc; code lives in Lonebody-Tools)

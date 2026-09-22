@@ -30,6 +30,9 @@ echo "adam ALL=(root) NOPASSWD: sha256:$(shasum -a 256 /opt/homebrew/bin/yabai |
 
 Yabai (tiling WM) + Sketchybar (status bar) for macOS. Two machines: Mac Studio and MacBook Pro.
 
+### Boundaries
+`workflow-tools` owns things that act on **this machine**. Tools that act on **content** live in their product repo; this repo may alias them onto the PATH (e.g. `transcribe` → Lonebody-Tools). Invocation mode is not a filing criterion.
+
 ### Repository Structure
 - **Main repo**: `~/workflow-tools`
 - **Sub-repo**: `sketchybar/sketchybar-app-font` — forked font repo, branch `add-new-icons`
