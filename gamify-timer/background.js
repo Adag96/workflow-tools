@@ -368,6 +368,7 @@ async function handleMessage(msg) {
         balance: shared.balance,
         history: shared.history,
         rewards: shared.rewards,
+        activities: shared.activities || [],
         tags: shared.tags || [],
         consecutiveRedemptions: shared.consecutiveRedemptions || {},
         minutesFocusedToday: shared.minutesFocusedToday || 0,
@@ -485,6 +486,37 @@ async function handleMessage(msg) {
       if (result.error) return result;
       updateBadge();
       return { success: true, newBalance: result.newBalance };
+    }
+
+    case 'logActivity': {
+      const shared = await getSharedData();
+      const activity = (shared.activities || []).find(a => a.id === msg.activityId);
+      if (!activity) return { error: 'Activity not found' };
+
+      // Whole credits only — leftover reps are discarded, not carried over
+      const amount = Math.floor(msg.count / activity.perCredit);
+      if (amount < 1) return { error: `Need at least ${activity.perCredit} for 1 FC.` };
+
+      const result = await nativeSend({
+        action: 'logEarn',
+        amount,
+        entry: {
+          type: 'earn',
+          amount,
+          activityName: activity.name,
+          activityEmoji: activity.emoji,
+          activityCount: msg.count,
+          timestamp: msg.timestamp
+        }
+      });
+      if (result.error) return result;
+      updateBadge();
+      return { success: true, amount, newBalance: result.newBalance };
+    }
+
+    case 'updateActivities': {
+      await nativeSend({ action: 'setActivities', activities: msg.activities });
+      return { success: true };
     }
 
     case 'updateRewards': {

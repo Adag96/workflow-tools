@@ -22,6 +22,9 @@ DEFAULT_DATA = {
         {'id': 1, 'name': 'Ghost Energy Drink', 'cost': 20, 'tier': 1, 'emoji': '\u26a1'},
         {'id': 2, 'name': 'Masturbate', 'cost': 60, 'tier': 2, 'emoji': '\U0001f525'}
     ],
+    'activities': [
+        {'id': 1, 'name': 'Sit-ups', 'emoji': '\U0001f4aa', 'perCredit': 4}
+    ],
     'tags': [],
     'consecutiveRedemptions': {},
     'minutesFocusedToday': 0,
@@ -90,6 +93,15 @@ def write_data(data):
         except OSError:
             pass
         raise
+
+
+def insert_chronological(history, entry):
+    # History is newest-first; place a backdated entry at its correct position
+    for i, h in enumerate(history):
+        if entry['timestamp'] >= h.get('timestamp', 0):
+            history.insert(i, entry)
+            return
+    history.append(entry)
 
 
 def read_message():
@@ -161,22 +173,26 @@ def handle(msg):
         if balance < cost and not allow_debt:
             return {'error': 'Insufficient credits'}
         data['balance'] = balance - cost
-        entry = msg['entry']
-        # Insert at correct chronological position (history is newest-first)
-        inserted = False
-        for i, h in enumerate(data['history']):
-            if entry['timestamp'] >= h.get('timestamp', 0):
-                data['history'].insert(i, entry)
-                inserted = True
-                break
-        if not inserted:
-            data['history'].append(entry)
+        insert_chronological(data['history'], msg['entry'])
+        write_data(data)
+        return {'success': True, 'newBalance': data['balance']}
+
+    elif action == 'logEarn':
+        data = read_data()
+        data['balance'] = data.get('balance', 0) + msg['amount']
+        insert_chronological(data['history'], msg['entry'])
         write_data(data)
         return {'success': True, 'newBalance': data['balance']}
 
     elif action == 'setRewards':
         data = read_data()
         data['rewards'] = msg['rewards']
+        write_data(data)
+        return {'success': True}
+
+    elif action == 'setActivities':
+        data = read_data()
+        data['activities'] = msg['activities']
         write_data(data)
         return {'success': True}
 
@@ -223,6 +239,7 @@ def handle(msg):
     elif action == 'resetConfig':
         data = read_data()
         data['rewards'] = DEFAULT_DATA['rewards']
+        data['activities'] = DEFAULT_DATA['activities']
         data['tags'] = DEFAULT_DATA['tags']
         data['settings'] = DEFAULT_DATA['settings'].copy()
         write_data(data)

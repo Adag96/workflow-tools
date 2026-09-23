@@ -4,6 +4,7 @@ let state = {
   balance: 0,
   history: [],
   rewards: [],
+  activities: [],
   tags: [],
   settings: {}
 };
@@ -11,6 +12,8 @@ let state = {
 let selectedMinutes = 25;
 let selectedTag = null;
 let editingRewardId = null;
+let editingActivityId = null;
+let loggingActivityId = null;
 let rewardMode = 'fixed';
 let spendTimer = null; // { rewardId, rewardName, costPerMin, startedAt, maxMinutes }
 let spendInterval = null;
@@ -30,6 +33,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   setupTabs();
   setupTimerControls();
   setupRewardModal();
+  setupActivities();
   setupHistoryChart();
   setupSettings();
   render();
@@ -169,6 +173,7 @@ function render() {
   renderTimer();
   renderStreak();
   renderTagSelector();
+  renderActivities();
 }
 
 function renderBalance() {
@@ -859,6 +864,148 @@ function setupRewardModal() {
   });
 }
 
+// Activities (manual credit earning, e.g. every 4 sit-ups = 1 FC)
+let lastActivitiesKey = null;
+
+function activityCredits(activity, count) {
+  // Whole credits only — leftover reps are discarded
+  return Math.floor((count || 0) / activity.perCredit);
+}
+
+function renderActivities() {
+  const activities = state.activities || [];
+  // render() runs every tick; only rebuild the pills when the list changes
+  const key = JSON.stringify(activities);
+  if (key === lastActivitiesKey) return;
+  lastActivitiesKey = key;
+
+  const bar = document.getElementById('activity-bar');
+  bar.innerHTML = activities.map(a =>
+    `<button class="tag-pill activity-pill" data-id="${a.id}" title="Log ${escapeHtml(a.name)} (${a.perCredit} = 1 FC)">${a.emoji} ${escapeHtml(a.name)}</button>`
+  ).join('') + `<button class="tag-pill activity-pill" id="btn-add-activity" title="Add activity">+</button>`;
+
+  bar.querySelectorAll('.activity-pill[data-id]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      openLogActivityModal(state.activities.find(a => a.id === parseInt(btn.dataset.id)));
+    });
+  });
+  document.getElementById('btn-add-activity').addEventListener('click', () => openActivityModal(null));
+}
+
+function openLogActivityModal(activity) {
+  loggingActivityId = activity.id;
+  const now = new Date();
+  document.getElementById('log-activity-title').textContent = `Log ${activity.emoji} ${activity.name}`;
+  document.getElementById('log-activity-count').value = '';
+  document.getElementById('log-activity-date').value = localDateStr(now);
+  document.getElementById('log-activity-time').value = now.toTimeString().slice(0, 5);
+  document.getElementById('log-activity-earn-display').textContent = '0';
+  document.getElementById('log-activity-modal').classList.remove('hidden');
+  document.getElementById('log-activity-count').focus();
+}
+
+function openActivityModal(activity) {
+  editingActivityId = activity ? activity.id : null;
+  document.getElementById('activity-modal-title').textContent = activity ? 'Edit Activity' : 'Add Activity';
+  document.getElementById('activity-name').value = activity ? activity.name : '';
+  document.getElementById('activity-emoji').value = activity ? activity.emoji : '';
+  document.getElementById('activity-per-credit').value = activity ? activity.perCredit : '';
+  document.getElementById('activity-modal').classList.remove('hidden');
+}
+
+async function saveActivities(activities) {
+  await chrome.runtime.sendMessage({ action: 'updateActivities', activities });
+  await loadState();
+  render();
+}
+
+function setupActivities() {
+  const logModal = document.getElementById('log-activity-modal');
+  const countInput = document.getElementById('log-activity-count');
+  const loggingActivity = () => state.activities.find(a => a.id === loggingActivityId);
+
+  countInput.addEventListener('input', () => {
+    const activity = loggingActivity();
+    document.getElementById('log-activity-earn-display').textContent =
+      activity ? activityCredits(activity, parseInt(countInput.value)) : 0;
+  });
+  countInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') document.getElementById('btn-log-activity-submit').click();
+  });
+
+  document.getElementById('btn-log-activity-cancel').addEventListener('click', () => {
+    logModal.classList.add('hidden');
+  });
+
+  document.getElementById('btn-log-activity-submit').addEventListener('click', async () => {
+    const activity = loggingActivity();
+    if (!activity) return;
+    const count = parseInt(countInput.value);
+    if (!count || count < 1) {
+      alert('Enter a valid count.');
+      return;
+    }
+    const dateVal = document.getElementById('log-activity-date').value;
+    const timeVal = document.getElementById('log-activity-time').value;
+    const timestamp = new Date(`${dateVal}T${timeVal}:00`).getTime();
+    if (!dateVal || !timeVal || isNaN(timestamp)) {
+      alert('Please select a valid date and time.');
+      return;
+    }
+
+    const result = await chrome.runtime.sendMessage({
+      action: 'logActivity', activityId: activity.id, count, timestamp
+    });
+    if (result?.error) {
+      alert(result.error);
+      return;
+    }
+
+    logModal.classList.add('hidden');
+    await loadState();
+    render();
+  });
+
+  document.getElementById('btn-edit-activity').addEventListener('click', () => {
+    const activity = loggingActivity();
+    if (!activity) return;
+    logModal.classList.add('hidden');
+    openActivityModal(activity);
+  });
+
+  document.getElementById('btn-delete-activity').addEventListener('click', async () => {
+    const activity = loggingActivity();
+    if (!activity || !confirm(`Delete "${activity.name}"? Logged history is kept.`)) return;
+    logModal.classList.add('hidden');
+    await saveActivities(state.activities.filter(a => a.id !== activity.id));
+  });
+
+  document.getElementById('btn-cancel-activity').addEventListener('click', () => {
+    document.getElementById('activity-modal').classList.add('hidden');
+  });
+
+  document.getElementById('btn-save-activity').addEventListener('click', async () => {
+    const name = document.getElementById('activity-name').value.trim();
+    const emoji = document.getElementById('activity-emoji').value.trim() || '💪';
+    const perCredit = parseInt(document.getElementById('activity-per-credit').value);
+    if (!name || !perCredit || perCredit < 1) {
+      alert('Please fill in name and count per credit.');
+      return;
+    }
+
+    let activities = [...(state.activities || [])];
+    if (editingActivityId) {
+      activities = activities.map(a => a.id === editingActivityId ? { ...a, name, emoji, perCredit } : a);
+    } else {
+      const maxId = activities.reduce((max, a) => Math.max(max, a.id), 0);
+      activities.push({ id: maxId + 1, name, emoji, perCredit });
+    }
+
+    document.getElementById('activity-modal').classList.add('hidden');
+    await saveActivities(activities);
+  });
+}
+
 // History
 function setupHistoryChart() {
   document.querySelectorAll('.history-view-btn').forEach(btn => {
@@ -1012,7 +1159,15 @@ function renderHistory() {
     }
 
     const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    if (entry.type === 'earn') {
+    if (entry.type === 'earn' && entry.activityName) {
+      return `${header}<div class="history-item earn">
+        <div>
+          <div class="history-detail">${entry.activityEmoji} ${entry.activityCount} ${escapeHtml(entry.activityName)} <button class="history-delete-activity" data-ts="${entry.timestamp}" title="Delete">&times;</button></div>
+          <div class="history-time">${time}</div>
+        </div>
+        <span class="history-amount positive">+${entry.amount} FC</span>
+      </div>`;
+    } else if (entry.type === 'earn') {
       const bonus = entry.streakBonus ? ` (${entry.streakBonus})` : '';
       const pauseNote = entry.pausePenalty ? ` <span class="history-pause-penalty">-${entry.pausePenalty}m paused</span>` : '';
       const tagObj = entry.tag ? (state.tags || []).find(t => t.name === entry.tag) : null;
@@ -1035,6 +1190,19 @@ function renderHistory() {
       </div>`;
     }
   }).join('');
+
+  // Bind history activity delete buttons (removes the entry and its credits)
+  list.querySelectorAll('.history-delete-activity').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      const ts = parseInt(btn.dataset.ts);
+      const entry = state.history.find(e => e.timestamp === ts);
+      if (!entry || !confirm(`Delete ${entry.activityCount} ${entry.activityName} (-${entry.amount} FC)?`)) return;
+      await chrome.runtime.sendMessage({ action: 'deleteHistoryEntry', timestamp: ts });
+      await loadState();
+      render();
+      renderHistory();
+    });
+  });
 
   // Bind history spend edit buttons
   list.querySelectorAll('.history-edit-spend').forEach(btn => {

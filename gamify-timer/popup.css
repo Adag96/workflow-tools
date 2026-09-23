@@ -233,6 +233,25 @@ h1 {
   opacity: 0.6;
 }
 
+#activity-bar {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: 12px;
+}
+
+.activity-pill:hover {
+  border-color: var(--green);
+}
+
+.log-activity-manage {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 8px;
+}
+
 #tag-selector.disabled .tag-pill {
   opacity: 0.4;
   pointer-events: none;
@@ -799,6 +818,7 @@ body.reconnecting #timer-label::after {
 
 .log-reward-datetime input {
   flex: 1;
+  min-width: 0;
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -894,7 +914,8 @@ body.reconnecting #timer-label::after {
   flex: 1;
 }
 
-#reward-cost-label {
+#reward-cost-label,
+.activity-per-credit-label {
   font-size: 12px;
   color: var(--text-faint);
   font-weight: 600;
@@ -1087,7 +1108,8 @@ body.reconnecting #timer-label::after {
   margin-left: 2px;
 }
 
-.history-edit-spend {
+.history-edit-spend,
+.history-delete-activity {
   background: transparent;
   border: none;
   color: var(--text-faintest);
@@ -1099,12 +1121,17 @@ body.reconnecting #timer-label::after {
   vertical-align: middle;
 }
 
-.history-item.spend:hover .history-edit-spend {
+.history-item.spend:hover .history-edit-spend,
+.history-item.earn:hover .history-delete-activity {
   opacity: 1;
 }
 
 .history-edit-spend:hover {
   color: var(--accent-light);
+}
+
+.history-delete-activity:hover {
+  color: var(--red);
 }
 
 .history-time {

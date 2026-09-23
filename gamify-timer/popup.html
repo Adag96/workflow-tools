@@ -22,7 +22,7 @@
 
     <!-- Tab Navigation -->
     <nav id="tabs">
-      <button class="tab active" data-tab="timer">Timer</button>
+      <button class="tab active" data-tab="timer">Earn</button>
       <button class="tab" data-tab="rewards">Rewards</button>
       <button class="tab" data-tab="history">History</button>
       <button class="tab" data-tab="settings">Settings</button>
@@ -63,6 +63,8 @@
         <button id="btn-cancel" class="secondary-btn hidden">Cancel</button>
       </div>
 
+      <div id="activity-bar"></div>
+
       <div id="streak-display"></div>
     </section>
 
@@ -73,7 +75,7 @@
       </div>
       <div id="rewards-list"></div>
       <div class="rewards-actions-row">
-        <button id="btn-add-reward" class="secondary-btn">+ Add Custom Reward</button>
+        <button id="btn-add-reward" class="secondary-btn">+ Add Reward</button>
         <button id="btn-log-reward" class="primary-btn">Log Past Reward</button>
       </div>
 
@@ -326,6 +328,44 @@
         <button id="btn-reset-all" class="danger-btn">Reset Everything</button>
       </div>
     </section>
+
+    <!-- Log Activity Modal -->
+    <div id="log-activity-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3 id="log-activity-title">Log Activity</h3>
+        <input type="number" id="log-activity-count" placeholder="Count" min="1">
+        <div class="log-reward-datetime">
+          <input type="date" id="log-activity-date">
+          <input type="time" id="log-activity-time">
+        </div>
+        <div class="log-reward-cost">Earns: <span id="log-activity-earn-display">0</span> FC</div>
+        <div class="modal-actions">
+          <button id="btn-log-activity-submit" class="primary-btn">Log</button>
+          <button id="btn-log-activity-cancel" class="secondary-btn">Cancel</button>
+        </div>
+        <div class="log-activity-manage">
+          <button id="btn-edit-activity" class="text-btn">Edit</button>
+          <button id="btn-delete-activity" class="text-btn">Delete</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add/Edit Activity Modal -->
+    <div id="activity-modal" class="modal hidden">
+      <div class="modal-content">
+        <h3 id="activity-modal-title">Add Activity</h3>
+        <input type="text" id="activity-name" placeholder="Activity name (e.g. Sit-ups)">
+        <input type="text" id="activity-emoji" placeholder="Emoji" maxlength="2">
+        <div class="reward-cost-row">
+          <input type="number" id="activity-per-credit" placeholder="Count per credit" min="1">
+          <span class="activity-per-credit-label">= 1 FC</span>
+        </div>
+        <div class="modal-actions">
+          <button id="btn-save-activity" class="primary-btn">Save</button>
+          <button id="btn-cancel-activity" class="secondary-btn">Cancel</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <script src="popup.js"></script>

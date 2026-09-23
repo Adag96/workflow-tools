@@ -44,3 +44,24 @@ to edit directly (back it up first). Award formula for a session:
 penalty only bites beyond the free `maxPausePercent` (default 10%) allowance.
 The stored balance should equal the signed sum of history amounts — reconcile if
 it drifts (small drifts come from history-entry edits / timed spends).
+
+---
+
+## 2026-09-23 — `__pycache__/` in the extension dir breaks "Reload"
+
+**Category:** Tooling / Chrome extension loading
+
+**What happened:** After adding the activity-credits feature, Chrome's reload
+failed with "Failed to reload extension".
+
+**Root cause:** A test did `import host` from inside the extension directory,
+so Python wrote `__pycache__/` there. Chrome refuses to load an unpacked
+extension that contains any file or directory whose name starts with `_`.
+
+**Rules:**
+1. Never import `host.py` from inside the extension dir. Test it with
+   `PYTHONDONTWRITEBYTECODE=1` or from a scratch copy, and delete any
+   `__pycache__/` before reloading.
+2. Reloading the extension doesn't lose a running timer. `timerState` lives in
+   `chrome.storage.local` with a wall-clock `startedAt`, and `recoverTimer()`
+   re-arms the alarm when the worker loads.
