@@ -23,7 +23,7 @@ DEFAULT_DATA = {
         {'id': 2, 'name': 'Masturbate', 'cost': 60, 'tier': 2, 'emoji': '\U0001f525'}
     ],
     'activities': [
-        {'id': 1, 'name': 'Sit-ups', 'emoji': '\U0001f4aa', 'perCredit': 4}
+        {'id': 1, 'name': 'Sit-ups', 'emoji': '\U0001f4aa', 'perCredit': 4, 'credits': 1, 'counted': True}
     ],
     'tags': [],
     'consecutiveRedemptions': {},

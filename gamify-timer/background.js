@@ -494,8 +494,12 @@ async function handleMessage(msg) {
       if (!activity) return { error: 'Activity not found' };
 
       // Whole credits only — leftover reps are discarded, not carried over
-      const amount = Math.floor(msg.count / activity.perCredit);
-      if (amount < 1) return { error: `Need at least ${activity.perCredit} for 1 FC.` };
+      const credits = activity.credits || 1;
+      // Legacy activities predate the flag; they were counted iff perCredit > 1
+      const counted = activity.counted ?? activity.perCredit > 1;
+      const count = counted ? msg.count : 1;
+      const amount = Math.floor(count / activity.perCredit) * credits;
+      if (amount < 1) return { error: `Need at least ${activity.perCredit} for ${credits} FC.` };
 
       const result = await nativeSend({
         action: 'logEarn',
@@ -505,7 +509,7 @@ async function handleMessage(msg) {
           amount,
           activityName: activity.name,
           activityEmoji: activity.emoji,
-          activityCount: msg.count,
+          activityCount: counted ? count : undefined,
           timestamp: msg.timestamp
         }
       });

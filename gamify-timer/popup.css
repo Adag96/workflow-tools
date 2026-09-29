@@ -912,6 +912,7 @@ body.reconnecting #timer-label::after {
 
 .reward-cost-row input {
   flex: 1;
+  min-width: 0;
 }
 
 #reward-cost-label,

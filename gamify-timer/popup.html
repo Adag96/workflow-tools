@@ -356,9 +356,16 @@
         <h3 id="activity-modal-title">Add Activity</h3>
         <input type="text" id="activity-name" placeholder="Activity name (e.g. Sit-ups)">
         <input type="text" id="activity-emoji" placeholder="Emoji" maxlength="2">
+        <label class="toggle-label" style="font-size:12px;">
+          <span>Log by count (reps, pages…)</span>
+          <input type="checkbox" id="activity-counted">
+        </label>
         <div class="reward-cost-row">
-          <input type="number" id="activity-per-credit" placeholder="Count per credit" min="1">
-          <span class="activity-per-credit-label">= 1 FC</span>
+          <span class="activity-per-credit-label">Earns</span>
+          <input type="number" id="activity-credits" placeholder="FC" min="1">
+          <span class="activity-per-credit-label">FC</span>
+          <span id="activity-per-group" class="activity-per-credit-label">per</span>
+          <input type="number" id="activity-per-credit" placeholder="Count" min="1">
         </div>
         <div class="modal-actions">
           <button id="btn-save-activity" class="primary-btn">Save</button>

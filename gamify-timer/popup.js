@@ -864,12 +864,21 @@ function setupRewardModal() {
   });
 }
 
-// Activities (manual credit earning, e.g. every 4 sit-ups = 1 FC)
+// Activities (manual credit earning: fixed FC per log, or per N counts e.g. 4 sit-ups = 1 FC)
 let lastActivitiesKey = null;
+
+function isCounted(activity) {
+  // Legacy activities predate the flag; they were counted iff perCredit > 1
+  return activity.counted ?? activity.perCredit > 1;
+}
 
 function activityCredits(activity, count) {
   // Whole credits only — leftover reps are discarded
-  return Math.floor((count || 0) / activity.perCredit);
+  return Math.floor((count || 0) / activity.perCredit) * (activity.credits || 1);
+}
+
+function activityRateLabel(a) {
+  return isCounted(a) ? `${a.credits || 1} FC per ${a.perCredit}` : `${a.credits || 1} FC`;
 }
 
 function renderActivities() {
@@ -881,7 +890,7 @@ function renderActivities() {
 
   const bar = document.getElementById('activity-bar');
   bar.innerHTML = activities.map(a =>
-    `<button class="tag-pill activity-pill" data-id="${a.id}" title="Log ${escapeHtml(a.name)} (${a.perCredit} = 1 FC)">${a.emoji} ${escapeHtml(a.name)}</button>`
+    `<button class="tag-pill activity-pill" data-id="${a.id}" title="Log ${escapeHtml(a.name)} (${activityRateLabel(a)})">${a.emoji} ${escapeHtml(a.name)}</button>`
   ).join('') + `<button class="tag-pill activity-pill" id="btn-add-activity" title="Add activity">+</button>`;
 
   bar.querySelectorAll('.activity-pill[data-id]').forEach(btn => {
@@ -896,12 +905,15 @@ function openLogActivityModal(activity) {
   loggingActivityId = activity.id;
   const now = new Date();
   document.getElementById('log-activity-title').textContent = `Log ${activity.emoji} ${activity.name}`;
-  document.getElementById('log-activity-count').value = '';
+  const counted = isCounted(activity);
+  const countInput = document.getElementById('log-activity-count');
+  countInput.value = '';
+  countInput.classList.toggle('hidden', !counted);
   document.getElementById('log-activity-date').value = localDateStr(now);
   document.getElementById('log-activity-time').value = now.toTimeString().slice(0, 5);
-  document.getElementById('log-activity-earn-display').textContent = '0';
+  document.getElementById('log-activity-earn-display').textContent = counted ? '0' : (activity.credits || 1);
   document.getElementById('log-activity-modal').classList.remove('hidden');
-  document.getElementById('log-activity-count').focus();
+  (counted ? countInput : document.getElementById('btn-log-activity-submit')).focus();
 }
 
 function openActivityModal(activity) {
@@ -910,7 +922,16 @@ function openActivityModal(activity) {
   document.getElementById('activity-name').value = activity ? activity.name : '';
   document.getElementById('activity-emoji').value = activity ? activity.emoji : '';
   document.getElementById('activity-per-credit').value = activity ? activity.perCredit : '';
+  document.getElementById('activity-credits').value = activity ? (activity.credits || 1) : '';
+  document.getElementById('activity-counted').checked = activity ? isCounted(activity) : false;
+  updateActivityCountedFields();
   document.getElementById('activity-modal').classList.remove('hidden');
+}
+
+function updateActivityCountedFields() {
+  const counted = document.getElementById('activity-counted').checked;
+  document.getElementById('activity-per-group').classList.toggle('hidden', !counted);
+  document.getElementById('activity-per-credit').classList.toggle('hidden', !counted);
 }
 
 async function saveActivities(activities) {
@@ -940,7 +961,7 @@ function setupActivities() {
   document.getElementById('btn-log-activity-submit').addEventListener('click', async () => {
     const activity = loggingActivity();
     if (!activity) return;
-    const count = parseInt(countInput.value);
+    const count = isCounted(activity) ? parseInt(countInput.value) : 1;
     if (!count || count < 1) {
       alert('Enter a valid count.');
       return;
@@ -980,6 +1001,8 @@ function setupActivities() {
     await saveActivities(state.activities.filter(a => a.id !== activity.id));
   });
 
+  document.getElementById('activity-counted').addEventListener('change', updateActivityCountedFields);
+
   document.getElementById('btn-cancel-activity').addEventListener('click', () => {
     document.getElementById('activity-modal').classList.add('hidden');
   });
@@ -987,18 +1010,20 @@ function setupActivities() {
   document.getElementById('btn-save-activity').addEventListener('click', async () => {
     const name = document.getElementById('activity-name').value.trim();
     const emoji = document.getElementById('activity-emoji').value.trim() || '💪';
-    const perCredit = parseInt(document.getElementById('activity-per-credit').value);
-    if (!name || !perCredit || perCredit < 1) {
-      alert('Please fill in name and count per credit.');
+    const counted = document.getElementById('activity-counted').checked;
+    const perCredit = counted ? parseInt(document.getElementById('activity-per-credit').value) : 1;
+    const credits = parseInt(document.getElementById('activity-credits').value);
+    if (!name || !perCredit || perCredit < 1 || !credits || credits < 1) {
+      alert(counted ? 'Please fill in name, FC, and count.' : 'Please fill in name and FC.');
       return;
     }
 
     let activities = [...(state.activities || [])];
     if (editingActivityId) {
-      activities = activities.map(a => a.id === editingActivityId ? { ...a, name, emoji, perCredit } : a);
+      activities = activities.map(a => a.id === editingActivityId ? { ...a, name, emoji, perCredit, credits, counted } : a);
     } else {
       const maxId = activities.reduce((max, a) => Math.max(max, a.id), 0);
-      activities.push({ id: maxId + 1, name, emoji, perCredit });
+      activities.push({ id: maxId + 1, name, emoji, perCredit, credits, counted });
     }
 
     document.getElementById('activity-modal').classList.add('hidden');
@@ -1162,7 +1187,7 @@ function renderHistory() {
     if (entry.type === 'earn' && entry.activityName) {
       return `${header}<div class="history-item earn">
         <div>
-          <div class="history-detail">${entry.activityEmoji} ${entry.activityCount} ${escapeHtml(entry.activityName)} <button class="history-delete-activity" data-ts="${entry.timestamp}" title="Delete">&times;</button></div>
+          <div class="history-detail">${entry.activityEmoji} ${entry.activityCount ? entry.activityCount + ' ' : ''}${escapeHtml(entry.activityName)} <button class="history-delete-activity" data-ts="${entry.timestamp}" title="Delete">&times;</button></div>
           <div class="history-time">${time}</div>
         </div>
         <span class="history-amount positive">+${entry.amount} FC</span>
@@ -1196,7 +1221,7 @@ function renderHistory() {
     btn.addEventListener('click', async () => {
       const ts = parseInt(btn.dataset.ts);
       const entry = state.history.find(e => e.timestamp === ts);
-      if (!entry || !confirm(`Delete ${entry.activityCount} ${entry.activityName} (-${entry.amount} FC)?`)) return;
+      if (!entry || !confirm(`Delete ${entry.activityCount ? entry.activityCount + ' ' : ''}${entry.activityName} (-${entry.amount} FC)?`)) return;
       await chrome.runtime.sendMessage({ action: 'deleteHistoryEntry', timestamp: ts });
       await loadState();
       render();
