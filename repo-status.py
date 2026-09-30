@@ -278,16 +278,13 @@ def pull_all(repos):
         path = os.path.expanduser(repo_path)
         display = get_display_name(repo_path, alias)
         if os.path.isdir(os.path.join(path, '.git')):
-            print(f"  {GRAY}Pulling {display}...{NC}", end='', flush=True)
-            result = subprocess.run(
-                ['git', '-C', path, 'pull', '--quiet'],
-                capture_output=True, text=True, timeout=30
-            )
+            print(f"  {GRAY}Pulling {display}...{NC}", flush=True)
+            # No timeout / no capture — see run_git_action.
+            result = subprocess.run(['git', '-C', path, 'pull', '--no-stat'])
             if result.returncode == 0:
-                print(f"\r  {GREEN}OK{NC} {display}              ")
+                print(f"  {GREEN}OK{NC} {display}")
             else:
-                err = result.stderr.strip().split('\n')[0] if result.stderr.strip() else "unknown error"
-                print(f"\r  {RED}FAIL{NC} {display}  {GRAY}{err}{NC}")
+                print(f"  {RED}FAIL{NC} {display}")
         else:
             print(f"  {RED}FAIL{NC} {display} (not a git repo)")
     print(f"\n{GRAY}Press any key to continue...{NC}")
@@ -445,22 +442,18 @@ def prompt_commit_message():
 
 
 def run_git_action(repo_path, args, label):
-    """Run a git command and show success/failure."""
-    result = subprocess.run(
-        ['git', '-C', repo_path] + args,
-        capture_output=True, text=True, timeout=30
-    )
+    """Run a git command and show success/failure.
+
+    Output goes straight to the terminal so git's own progress bars show on
+    large transfers. No timeout: killing git mid-transfer is what caused false
+    "timed out" failures (and half-finished pulls) on big vault syncs.
+    """
+    print(f"  {GRAY}{label}...{NC}", flush=True)
+    result = subprocess.run(['git', '-C', repo_path] + args)
     if result.returncode == 0:
         print(f"  {GREEN}OK{NC} {label}")
-        if result.stdout.strip():
-            for line in result.stdout.strip().split('\n')[:5]:
-                print(f"    {GRAY}{line}{NC}")
     else:
         print(f"  {RED}FAIL{NC} {label}")
-        err = result.stderr.strip() or result.stdout.strip()
-        if err:
-            for line in err.split('\n')[:5]:
-                print(f"    {RED}{line}{NC}")
     return result.returncode == 0
 
 
@@ -765,13 +758,14 @@ def main():
             return False  # Slow/unreachable remote — skip; ahead/behind may be stale.
 
     fetch_targets = [
-        (os.path.expanduser(repo_path), alias)
+        (os.path.expanduser(repo_path), get_display_name(repo_path, alias))
         for repo_path, alias, _group in repos
         if os.path.isdir(os.path.join(os.path.expanduser(repo_path), '.git'))
     ]
     total = len(fetch_targets)
     print(f"  {BLUE}Fetching latest from remotes...{NC}\n")
     done = 0
+    skipped = []
     with ThreadPoolExecutor(max_workers=8) as pool:
         futures = {pool.submit(fetch_one, path): alias
                    for path, alias in fetch_targets}
@@ -779,10 +773,15 @@ def main():
             done += 1
             alias = futures[future]
             ok = future.result()
+            if not ok:
+                skipped.append(alias)
             mark = f"{GREEN}OK{NC}" if ok else f"{YELLOW}skip{NC}"
             # \r rewrites the same line so the header doesn't scroll away
             print(f"\r  {mark} {CYAN}[{done}/{total}]{NC} {alias:<28}", end='', flush=True)
-    print(f"\r  {GREEN}Done{NC} — fetched {total} repos.{' ' * 28}")
+    print(f"\r  {GREEN}Done{NC} — fetched {total - len(skipped)}/{total} repos.{' ' * 28}")
+    if skipped:
+        # A skip is a slow remote (e.g. a large pending download), not a failure.
+        print(f"  {YELLOW}Slow — skipped, status may be stale:{NC} {', '.join(skipped)}")
 
     idx = 0
     refresh = True
