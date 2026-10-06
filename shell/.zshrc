@@ -132,9 +132,21 @@ unset __conda_setup
 # <<< conda initialize <<<
 
 export PATH="$HOME/.local/bin:$PATH"
-alias clean="$HOME/workflow-tools/big-cleaner.py"
-alias repo="$HOME/workflow-tools/repo-status.py"
-alias transcribe="$HOME/Developer/Lonebody-Tools/Sources/LonebodyTools/Tools/AudioTranscription/Core/transcribe_audio.py"
+
+# --- custom tools ------------------------------------------------------------
+# The trailing "# description" on each alias is what `tools` prints. An alias
+# without one won't be listed.
+alias clean="$HOME/workflow-tools/big-cleaner.py"  # Free up disk space, kill processes, uninstall apps
+alias repo="$HOME/workflow-tools/repo-status.py"  # Manage all repositories in one dashboard
+alias transcribe="$HOME/Developer/Lonebody-Tools/Sources/LonebodyTools/Tools/AudioTranscription/Core/transcribe_audio.py"  # Transcribe audio or video files to text
+
+tools() {
+    awk '/^alias [^=]+=.*  # / {
+        name = $2; sub(/=.*/, "", name)
+        desc = $0; sub(/.*  # /, "", desc)
+        printf "  \033[1;35m%-12s\033[0m %s\n", name, desc
+    }' "$HOME/.zshrc"
+}
 
 # --- venv reminder -----------------------------------------------------------
 # Warns when you cd into a directory that has a virtual environment which isn't
