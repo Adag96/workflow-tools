@@ -1,10 +1,12 @@
 import chokidar from "chokidar";
-import { install } from "./install.js";
+import { install, parseArgs } from "./install.js";
 import express from "express";
 import livereload from "livereload";
 import fs from "node:fs";
 
-install(process.argv[2]);
+const { scriptPath, options } = parseArgs(process.argv.slice(2));
+
+install(scriptPath, true, options);
 
 // launch express server with livereload
 
@@ -12,12 +14,11 @@ const liveReloadServer = livereload.createServer();
 
 const app = express();
 
+app.get("/font.woff2", (req, res) => {
+  res.sendFile("sketchybar-app-font.woff2", {root: "./dist"});
+});
+
 app.get("*", (req, res) => {
-  // Build the path of the file using the URL pathname of the request.
-  if (req.url.indexOf("font.woff2") > 0) {
-    res.sendFile("sketchybar-app-font.woff2", {root: "./dist"});
-    return;
-  }
   res.send(getPreviewHTML());
 });
 
@@ -28,18 +29,22 @@ app.listen(PORT, () => {
   console.log("Watching for changes in ./mappings and ./svgs\n");
 });
 
-chokidar.watch(["./mappings", "./svgs"]).on("change", (path) => {
+chokidar.watch(["./mappings", "./svgs"], { ignored: "**/.DS_Store" }).on("change", (path) => {
   console.log(`\nFile changed: ${path}`);
   console.log("Rebuilding...");
-  install(process.argv[2], false);
+  install(scriptPath, false, options);
   liveReloadServer.refresh("/");
   console.log("Rebuild complete\n");
 });
 
 function getPreviewHTML() {
+  // Every mapping points at an svg, so listing the svgs covers mapped app icons
+  // and utility icons (no mapping) alike
   const iconMap = fs
-    .readdirSync("./mappings")
-    .map((file) => file.replace(".svg", ""));
+    .readdirSync("./svgs")
+    .filter((file) => file !== ".DS_Store")
+    .map((file) => file.replace(".svg", ""))
+    .sort();
 
   return `
 <!DOCTYPE html>
