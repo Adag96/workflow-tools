@@ -265,18 +265,20 @@ sketchybar --add item calendar right  \
              update_freq=600 \
              script="$PLUGIN_DIR/calendar.sh"
 
-# Right side is added right-to-left, so this reads (left→right): media, volume, battery, cpu
+# Right side is added right-to-left, so this reads (left→right): volume, battery, cpu
 source $ITEM_DIR/cpu.sh
 source $ITEM_DIR/battery.sh
 source $ITEM_DIR/volume.sh
-source $ITEM_DIR/media.sh
 pill_edge right_start right
+
+# Now Playing widget: its own pill, just left of the right pill (hidden unless playing)
+source $ITEM_DIR/media.sh
 
 # Dynamic space brackets (handles any number of spaces across displays)
 source $ITEM_DIR/space_brackets.sh
 
 # Right pill: system info and controls (PILL LEVEL 1)
-sketchybar --add bracket right_bracket right_start media battery cpu volume volume_icon calendar clock controls right_end \
+sketchybar --add bracket right_bracket right_start battery cpu volume volume_icon calendar clock controls right_end \
            --set right_bracket background.color=$PILL_COLOR_1 \
                                background.height=$PILL_HEIGHT \
                                background.corner_radius=$PILL_RADIUS \

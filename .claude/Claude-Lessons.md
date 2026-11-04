@@ -83,3 +83,9 @@ Each lesson follows this structure:
 - **Category**: Sketchybar
 - **What happened**: A Semibold/Bold/Heavy comparison came out pixel-identical. Changing `--bar color/topmost` for the capture backdrop fired an event that re-ran plugins/space.sh, which re-applied Semibold before the screenshot. (A zsh `for s in $(...)` loop also failed to word-split, silently malforming the --set.)
 - **Rule**: For live A/B captures, `sketchybar --set spaces_watcher script=""` first (a reload restores it), use explicit item lists or bash, and query the property right before each screenshot. Recreate the "before" state live from the current window state rather than reusing an older capture.
+
+### Now Playing: media_change is dead on macOS 15.4+; long-running watchers must kill their children
+- **Date**: 2026-11-04
+- **Category**: Sketchybar
+- **What happened**: The old media item never showed (sketchybar's media_change relies on MediaRemote, locked down in 15.4). The replacement watcher (plugins/media.sh, `media-control stream`) leaked its reader on every reload: media-control execs a perl adapter whose cmdline doesn't contain "media-control", so `pkill -f "media-control stream"` missed it.
+- **Rule**: Use `media-control` (brew) for Now Playing. Any long-running process started from the rc writes its PID (`echo $$ > /tmp/...pid`) and the rc kills it with `pkill -P <pid>; kill <pid>` before starting a new one. Verify with `ps` across two reloads that exactly one instance survives.
