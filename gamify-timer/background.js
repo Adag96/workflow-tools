@@ -72,6 +72,81 @@ async function recoverTimer() {
 chrome.runtime.onStartup.addListener(recoverTimer);
 recoverTimer();
 
+// Report this profile's timer to the native host, which mirrors it for the
+// sketchybar widget (all profiles' timers in one place). Best-effort: a host
+// failure must never affect the timer itself.
+const REPORTED_KEYS = ['status', 'mode', 'startedAt', 'sessionMinutes', 'totalPausedSeconds', 'pausedAt', 'tag'];
+
+async function getInstanceId() {
+  let { instanceId } = await chrome.storage.local.get('instanceId');
+  if (!instanceId) {
+    instanceId = crypto.randomUUID();
+    await chrome.storage.local.set({ instanceId });
+  }
+  return instanceId;
+}
+
+async function reportTimer(timerState) {
+  try {
+    const timer = {};
+    for (const key of REPORTED_KEYS) timer[key] = timerState?.[key] ?? null;
+    await nativeSend({ action: 'reportTimer', instanceId: await getInstanceId(), timer });
+  } catch (e) {
+    console.warn('reportTimer failed:', e.message);
+  }
+}
+
+// Every timerState write goes through storage, so this catches all paths (start,
+// pause, resume, cancel, completion, recovery). The tick rewrites remainingSeconds
+// every second — skip those, or the host would be spawned once a second.
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area !== 'local' || !changes.timerState) return;
+  const { oldValue, newValue } = changes.timerState;
+  if (REPORTED_KEYS.some(k => oldValue?.[k] !== newValue?.[k])) {
+    reportTimer(newValue);
+    syncCommandPort(newValue);
+  }
+});
+
+// Command channel from the sketchybar widget's pause/resume button. Only while a
+// timer is running or paused, this profile holds a native port open; host.py then
+// forwards {type:'command'} messages it picks up for this instanceId. The open port
+// also keeps the MV3 service worker alive, so commands land immediately. Commands go
+// through handleMessage, so pause/resume behave exactly like the popup's buttons.
+let commandPort = null;
+
+async function syncCommandPort(timerState) {
+  const active = timerState?.status === 'running' || timerState?.status === 'paused';
+  if (!active) {
+    if (commandPort) { commandPort.disconnect(); commandPort = null; }
+    return;
+  }
+  if (commandPort) return;
+  const instanceId = await getInstanceId();
+  if (commandPort) return;   // another call connected while we awaited
+  try {
+    commandPort = chrome.runtime.connectNative(HOST_NAME);
+    commandPort.onMessage.addListener(async (m) => {
+      if (m?.type !== 'command' || m.command !== 'toggle') return;
+      const { timerState: current } = await chrome.storage.local.get('timerState');
+      if (current?.status === 'running') await handleMessage({ action: 'pause' });
+      else if (current?.status === 'paused') await handleMessage({ action: 'resume' });
+    });
+    commandPort.onDisconnect.addListener(() => { commandPort = null; });
+    commandPort.postMessage({ action: 'listenCommands', instanceId });
+  } catch (e) {
+    console.warn('command port failed:', e.message);
+    commandPort = null;
+  }
+}
+
+// Re-report (and re-open the command channel) on every worker start, so the
+// widget recovers after a reload/restart
+chrome.storage.local.get('timerState').then(({ timerState }) => {
+  reportTimer(timerState);
+  syncCommandPort(timerState);
+});
+
 // Local date string (YYYY-MM-DD) — avoids UTC timezone drift
 function localDateStr(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;

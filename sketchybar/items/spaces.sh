@@ -30,8 +30,8 @@ if [ -z "$SPACES_JSON" ] || [ "$SPACES_JSON" = "null" ]; then
 
         sketchybar --add item space_icons.$sid left \
                    --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_TEXT.0" \
-                                         label.padding_right=$PADDING_S \
-                                         label.padding_left=$PADDING_S \
+                                         label.padding_right=$PADDING_M \
+                                         label.padding_left=$PADDING_M \
                                          padding_left=0 \
                                          padding_right=2 \
                                          background.height=$ICON_PILL_HEIGHT \
@@ -65,8 +65,8 @@ else
 
         sketchybar --add item space_icons.$sid left \
                    --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_TEXT.0" \
-                                         label.padding_right=$PADDING_S \
-                                         label.padding_left=$PADDING_S \
+                                         label.padding_right=$PADDING_M \
+                                         label.padding_left=$PADDING_M \
                                          padding_left=0 \
                                          padding_right=2 \
                                          background.height=$ICON_PILL_HEIGHT \

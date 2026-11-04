@@ -89,3 +89,10 @@ Each lesson follows this structure:
 - **Category**: Sketchybar
 - **What happened**: The old media item never showed (sketchybar's media_change relies on MediaRemote, locked down in 15.4). The replacement watcher (plugins/media.sh, `media-control stream`) leaked its reader on every reload: media-control execs a perl adapter whose cmdline doesn't contain "media-control", so `pkill -f "media-control stream"` missed it.
 - **Rule**: Use `media-control` (brew) for Now Playing. Any long-running process started from the rc writes its PID (`echo $$ > /tmp/...pid`) and the rc kills it with `pkill -P <pid>; kill <pid>` before starting a new one. Verify with `ps` across two reloads that exactly one instance survives.
+
+### Animating an item open/closed inside a pill: animate icon/label widths, not `width`
+- **Date**: 2026-11-04
+- **Category**: Sketchybar
+- **What happened**: The Gamify pause section animated `width` 0↔80. After resume the item was width 0 but the pill stayed 72pt too wide (and jumped to full width on the first opening frame).
+- **Root cause**: A bracket's background spans its members' *drawn* extent. Text overflowing a 0-width item (even fully transparent) still counts.
+- **Rule**: To collapse/expand an item, animate `icon.width`, `icon.padding_right`, `label.width` and `padding_left` to 0 / their open values (a fully collapsed item reports a 0 bounding rect). Verify by checking the bracket's width returns exactly to its pre-animation value after a full cycle.

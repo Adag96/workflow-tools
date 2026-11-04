@@ -274,6 +274,9 @@ pill_edge right_start right
 # Now Playing widget: its own pill, just left of the right pill (hidden unless playing)
 source $ITEM_DIR/media.sh
 
+# Gamify Timer widget: centered pill of running Pomodoros across Brave profiles
+source $ITEM_DIR/gamify.sh
+
 # Dynamic space brackets (handles any number of spaces across displays)
 source $ITEM_DIR/space_brackets.sh
 

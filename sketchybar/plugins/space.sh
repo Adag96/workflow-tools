@@ -74,7 +74,7 @@ while :; do
                                icon.highlight_color=$ACCENT_COLOR \
                                icon.font="SF Pro:Heavy:$FONT_SIZE_TEXT.0" \
                                icon.padding_left=10 \
-                               icon.padding_right=4 \
+                               icon.padding_right=6 \
                                associated_display=$display)
       # Space capsule groups number + icons; the inner icon pill separates the
       # windows from the number while keeping them one group.
@@ -97,7 +97,7 @@ while :; do
                                icon.highlight_color=$ACCENT_COLOR \
                                icon.font="SF Pro:Heavy:$FONT_SIZE_TEXT.0" \
                                icon.padding_left=10 \
-                               icon.padding_right=4 \
+                               icon.padding_right=6 \
                                associated_display=$display)
       ARGS+=(--set "space_${sid}_bracket" background.drawing=off)
       ARGS+=(--set "space_icons.$sid" background.drawing=off \

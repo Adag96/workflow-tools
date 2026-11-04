@@ -65,3 +65,26 @@ extension that contains any file or directory whose name starts with `_`.
 2. Reloading the extension doesn't lose a running timer. `timerState` lives in
    `chrome.storage.local` with a wall-clock `startedAt`, and `recoverTimer()`
    re-arms the alarm when the worker loads.
+
+---
+
+## 2026-11-04 — Sketchybar timer widget: report state changes only, and give the host $USER
+
+**Category:** Native messaging / integration
+
+**What happened:** Added a `reportTimer` action so `host.py` mirrors each profile's
+timer to `~/.cache/sketchybar/gamify/<instanceId>.json` for a sketchybar widget.
+Two traps: the tick handler rewrites `timerState.remainingSeconds` every second, so
+a naive `storage.onChanged` hook would spawn the host once a second per profile;
+and the host's `sketchybar --trigger` silently failed in a stripped environment
+because the sketchybar client aborts when `$USER` is unset.
+
+**Rules:**
+1. Report only when a meaningful key changes (`REPORTED_KEYS` in background.js:
+   status/mode/startedAt/sessionMinutes/totalPausedSeconds/pausedAt/tag) — never on
+   the per-second `remainingSeconds` writes. The widget computes time left itself.
+2. Reporting is best-effort: it must never throw into timer logic.
+3. Any subprocess the host launches gets `PATH` fallbacks and `USER` set
+   (`pwd.getpwuid`), since browsers launch hosts with a minimal environment.
+4. Test the host by running it as a script with framed stdin messages and
+   `PYTHONDONTWRITEBYTECODE=1` (never `import host` from this dir — see above).
