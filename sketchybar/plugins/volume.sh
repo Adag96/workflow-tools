@@ -2,7 +2,8 @@
 
 WIDTH=100
 ICONS_VOLUME=(􀊣 􀊡 􀊥 􀊧 􀊩)
-ICON_FIXED=${ICONS_VOLUME[4]}   # hardware-volume devices: the normal speaker icon, never "muted"
+ICON_FIXED="􀝏"   # hifispeaker.fill: output sketchybar can't control (no macOS volume, e.g. the
+                  # Apollo — its level lives in SoundSource / the hardware knob)
 
 # Audio interfaces like the UA Apollo have no software volume: macOS reports
 # "missing value" and sketchybar's volume_change sends 0, which used to show "muted".

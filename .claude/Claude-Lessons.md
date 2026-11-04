@@ -96,3 +96,10 @@ Each lesson follows this structure:
 - **What happened**: The Gamify pause section animated `width` 0↔80. After resume the item was width 0 but the pill stayed 72pt too wide (and jumped to full width on the first opening frame).
 - **Root cause**: A bracket's background spans its members' *drawn* extent. Text overflowing a 0-width item (even fully transparent) still counts.
 - **Rule**: To collapse/expand an item, animate `icon.width`, `icon.padding_right`, `label.width` and `padding_left` to 0 / their open values (a fully collapsed item reports a 0 bounding rect). Verify by checking the bracket's width returns exactly to its pre-animation value after a full cycle.
+
+### Volume widget vs. the Apollo + SoundSource
+- **Date**: 2026-11-04
+- **Category**: Sketchybar
+- **What happened**: The volume icon showed "muted" and the slider did nothing on the UA Apollo Twin X, yet the keyboard volume knob worked. Initially misdiagnosed as "the Apollo can't be controlled from the Mac".
+- **Root cause**: The Apollo exposes no CoreAudio volume/mute (`output volume` = "missing value"). SoundSource adds its own software volume for it and intercepts the volume keys; sketchybar's slider/volume_change only see macOS's volume. SoundSource has no AppleScript, only Shortcuts actions (Set Device Volume/Mute — no getter); its live level sits in a private archive (Sources.plist).
+- **Rule**: When `output volume` is "missing value", show `hifispeaker.fill` and keep the slider closed (plugins/volume.sh, volume_click.sh); devices with a macOS volume get the normal icons + slider. Don't read SoundSource's private files. UA Mixer Engine (TCP 4710) exposes the MONITOR output's CRMonitorLevel/Mute if hardware monitor control is ever wanted.
