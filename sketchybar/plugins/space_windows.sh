@@ -6,8 +6,6 @@ CONFIG_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 export SCALE_FACTOR=10
 BASE_UNIT_RAW=4
 export BASE_UNIT=$((BASE_UNIT_RAW * SCALE_FACTOR / 10))
-export RADIUS_L4=$((BASE_UNIT * 2))
-export HEIGHT_L4=$((BASE_UNIT * 5))
 
 # Load the color scheme
 source "$HOME/.config/sketchybar/items/scheme.sh"
@@ -53,9 +51,8 @@ if [ "$SENDER" = "space_windows_change" ]; then
    # Active space with apps - show Pill Level 4 background
    sketchybar --set space_icons.$space label="$icon_strip" \
                                       background.drawing=on \
-                                      background.color=$PILL_COLOR_4 \
-                                      background.corner_radius=$RADIUS_L4 \
-                                      background.height=$HEIGHT_L4
+                                      background.color=$PILL_COLOR_4
+   # (pill geometry is set once in items/spaces.sh — don't restyle it here)
  else
    # Inactive space or no apps - no background
    sketchybar --set space_icons.$space label="$icon_strip" \

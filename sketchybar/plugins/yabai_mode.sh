@@ -1,23 +1,11 @@
 #!/bin/bash
-
 CONFIG_DIR="${CONFIG_DIR:-$HOME/workflow-tools/sketchybar}"
-source "$CONFIG_DIR/items/scheme.sh"
+case "$SENDER" in
+  mouse.entered|mouse.exited) exec "$CONFIG_DIR/plugins/hover.sh" ;;
+esac
 source "$CONFIG_DIR/icons.sh"
 
-space_number=$(yabai -m query --spaces --space | jq -r .index)
-yabai_mode=$(yabai -m query --spaces --space | jq -r .type)
-
-case "$yabai_mode" in
-    bsp)
-    sketchybar -m --set yabai_mode icon="$BSP_ICON" \
-                                  background.color=$LEFT_ITEM_COLOR \
-                                  background.drawing=off \
-                                  icon.color=$RIGHT_TEXT_COLOR
-    ;;
-    stack)
-    sketchybar -m --set yabai_mode icon="$STACK_ICON" \
-                                  background.color=$LEFT_ITEM_COLOR \
-                                  background.drawing=off \
-                                  icon.color=$RIGHT_TEXT_COLOR
-    ;;
+case "$(yabai -m query --spaces --space | jq -r .type)" in
+  bsp)   sketchybar --set yabai_mode icon="$BSP_ICON"   label="Layout: BSP" ;;
+  stack) sketchybar --set yabai_mode icon="$STACK_ICON" label="Layout: Stack" ;;
 esac

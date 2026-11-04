@@ -21,6 +21,25 @@ export PADDING_S=$((BASE_UNIT * 3 / 2))  # 6px @ scale 10
 export PADDING_M=$((BASE_UNIT * 2))      # 8px @ scale 10  
 export PADDING_L=$((BASE_UNIT * 3))      # 12px @ scale 10
 
+# --- Layout Tokens (use these, not raw numbers) ---
+# Inside a group < between groups: icon↔label 8, item↔item 18 (9 each side),
+# pill edge 4 (= vertical inset of the 20px capsules in the 28px pills).
+export GAP_ICON_LABEL=$PADDING_M         # 8px  icon ↔ its own label
+export ITEM_PAD=$((BASE_UNIT * 9 / 4))   # 9px per side → 18px between items
+# Pill nesting (concentric: each level is inset evenly on every side)
+export PILL_HEIGHT=$((BASE_UNIT * 8))                 # 32px: outer left/right pills
+export PILL_RADIUS=$((PILL_HEIGHT / 2))
+export CAPSULE_HEIGHT=$((BASE_UNIT * 13 / 2))         # 26px: active space, front app, hovers
+export CAPSULE_RADIUS=$((CAPSULE_HEIGHT / 2))
+export ICON_PILL_HEIGHT=$((BASE_UNIT * 11 / 2))       # 22px: icon pill inside the active space
+export ICON_PILL_RADIUS=$((ICON_PILL_HEIGHT / 2))
+export PILL_EDGE=$(((PILL_HEIGHT - CAPSULE_HEIGHT) / 2))  # 3px  outer pill ↔ capsule, every side
+# Vertical optics (measured): SF Pro's cap-height centre and SF Symbols sit ~1pt below
+# the line-box centre, so every glyph is lifted 1pt; the pills themselves don't move.
+export GLYPH_LIFT=1
+export ICON_OVERHANG=2                   # SF Symbols draw past their reported width; icon-only
+                                         # items need this much right padding or get clipped
+
 # --- Corner Radius Scale ---
 export RADIUS_L1=$((BASE_UNIT * 4))      # 16px @ scale 10
 export RADIUS_L2=$((BASE_UNIT * 3))      # 12px @ scale 10
@@ -37,20 +56,22 @@ export HEIGHT_L4=$((BASE_UNIT * 5))      # 20px @ scale 10
 export BORDER_THIN=1                     # 1px
 export BORDER_THICK=2                    # 2px
 
-# --- Font Size Scale ---
-# Base font sizes that scale proportionally with SCALE_FACTOR
-export FONT_SIZE_SMALL=$((BASE_UNIT * 3))   # 12px @ scale 10
-export FONT_SIZE_MEDIUM=$((BASE_UNIT * 15 / 4))  # 15px @ scale 10  
-export FONT_SIZE_LARGE=$((BASE_UNIT * 4))   # 16px @ scale 10
-export FONT_SIZE_XL=$((BASE_UNIT * 17 / 4)) # 17px @ scale 10
-export FONT_SIZE_XXL=$((BASE_UNIT * 9 / 2)) # 18px @ scale 10
+# --- Type Scale: two sizes, two weights ---
+# Semibold everywhere; Heavy only for the single primary item (the clock time).
+# SF Symbols are drawn to match text at the same point size, so icons use TEXT too.
+export FONT_SIZE_TEXT=$((BASE_UNIT * 15 / 4))       # 15px @ scale 10: all text + icons
+export FONT_SIZE_SECONDARY=$((BASE_UNIT * 13 / 4))  # 13px @ scale 10: secondary text (AM/PM)
+# Live numbers sit in fixed, right-aligned boxes sized to their widest value, so a
+# changing number can't push its neighbours around (SF Pro digits are proportional).
+export CLOCK_WIDTH=$((FONT_SIZE_TEXT * 3 + 7))      # 52px: widest time "10:48" (Heavy); <50 clips the leading "1"
+export CPU_WIDTH=$((FONT_SIZE_TEXT * 5 / 2))        # 37px: widest value "88%" (Semibold)
 
 # Export all variables for use in other scripts
 export SCALE_FACTOR BASE_UNIT PADDING_S PADDING_M PADDING_L
 export RADIUS_L1 RADIUS_L2 RADIUS_L3 RADIUS_L4
 export HEIGHT_L1 HEIGHT_L2 HEIGHT_L3 HEIGHT_L4
 export BORDER_THIN BORDER_THICK
-export FONT_SIZE_SMALL FONT_SIZE_MEDIUM FONT_SIZE_LARGE FONT_SIZE_XL FONT_SIZE_XXL
+export FONT_SIZE_TEXT FONT_SIZE_SECONDARY
 
 # Set CONFIG_DIR for proper sourcing
 CONFIG_DIR="$HOME/workflow-tools/sketchybar"
@@ -59,6 +80,8 @@ export CONFIG_DIR
 source "$CONFIG_DIR/items/scheme.sh"
 get_colors "$(cat "$HOME/.cache/sketchybar/current_scheme")"
 source "$CONFIG_DIR/icons.sh"  # Loads all defined icons
+# Icons stay full strength: subtle means "inactive" (spaces only), and these controls are always live
+export ICON_COLOR=$RIGHT_TEXT_COLOR
 source "$CONFIG_DIR/fonts.sh"  # Loads all defined fonts
 
 # This is a demo config to showcase some of the most important commands.
@@ -93,157 +116,171 @@ export CORNER_RADIUS
 # https://felixkratz.github.io/SketchyBar/config/items
 
 default=(
-  padding_left=$PADDING_S
-  padding_right=$PADDING_S
-  icon.font="$ICON_FONT:Semibold:$FONT_SIZE_LARGE.0"
-  label.font="$TEXT_FONT:Semibold:$FONT_SIZE_MEDIUM.0"
+  padding_left=$ITEM_PAD
+  padding_right=$ITEM_PAD
+  icon.font="$ICON_FONT:Semibold:$FONT_SIZE_TEXT.0"
+  label.font="$TEXT_FONT:Semibold:$FONT_SIZE_TEXT.0"
   icon.color=0xffffffff #white
   label.color=0xffffffff #white
-  background.color=$RIGHT_ITEM_COLOR
-  background.corner_radius=$RADIUS_L3
-  background.height=$HEIGHT_L4
+  background.color=$PILL_COLOR_4
+  background.corner_radius=$CAPSULE_RADIUS
+  background.height=$CAPSULE_HEIGHT
   background.drawing=off 
   y_offset=$Y_OFFSET
-  icon.padding_left=10
-  icon.padding_right=$PADDING_S
-  label.padding_left=$PADDING_S
-  label.padding_right=10
+  icon.padding_left=0
+  icon.padding_right=$GAP_ICON_LABEL
+  label.padding_left=0
+  label.padding_right=0
+  icon.y_offset=$GLYPH_LIFT
+  label.y_offset=$GLYPH_LIFT
 )
 sketchybar --default "${default[@]}"
 
+# Clickable icon buttons: a capsule around the icon on hover (handled by plugins/hover.sh).
+# The capsule's inner padding is taken out of the item padding, so spacing is unchanged.
+hover_button=(
+  icon.padding_left=$PADDING_S
+  icon.padding_right=$((PADDING_S + ICON_OVERHANG))
+  padding_left=$((ITEM_PAD - PADDING_S))
+  padding_right=$((ITEM_PAD - PADDING_S))
+  background.color=$PILL_COLOR_4
+  background.height=$CAPSULE_HEIGHT
+  background.corner_radius=$CAPSULE_RADIUS
+  background.drawing=off                          # last: setting a color re-enables drawing
+)
+
+# Invisible spacer that insets a pill's contents from its rounded end.
+# Pills (brackets) include their members' padding, so the edge inset has to be
+# a member of the outer pill but NOT of any inner capsule.
+pill_edge() {
+  sketchybar --add item "$1" "$2" \
+             --set "$1" width=$PILL_EDGE padding_left=0 padding_right=0 \
+                        icon.drawing=off label.drawing=off background.drawing=off
+}
+
 # -- LEFT SIDE ITEMS --
+pill_edge left_edge left
 source $ITEM_DIR/spaces.sh
 source $ITEM_DIR/front_app.sh
 
-# Yabai mode toggle
-sketchybar -m --add item yabai_mode left \
-              --set yabai_mode \
-                label.drawing=off \
-                label.padding_left=0 \
-                label.padding_right=0 \
-                width=35 \
-                icon.padding_left=5 \
-                icon.padding_right=0 \
-                padding_right=2 \
-                icon.font="$ICON_FONT:Semibold:$FONT_SIZE_XXL.0" \
-              --set yabai_mode update_freq=3 \
-              --set yabai_mode script="~/.config/sketchybar/plugins/yabai_mode.sh" \
-              --set yabai_mode click_script="~/.config/sketchybar/plugins/yabai_mode_click.sh" \
-              --subscribe yabai_mode space_change
-
-# Yabai toggle button
-sketchybar --add item yabai.toggle left \
-           --set yabai.toggle \
-             width=28 \
-             icon.font="SF Symbols:Regular:$FONT_SIZE_XL.0" \
-             icon.color=$LEFT_TEXT_COLOR \
-             icon.padding_left=0 \
-             icon.padding_right=2 \
-             icon.y_offset=1 \
-             align=center \
-             padding_left=6 \
-             background.drawing=off \
-             click_script="$PLUGIN_DIR/toggle_yabai.sh" \
+# Yabai layout toggle (BSP/Stack) — used constantly, so it stays on the bar
+sketchybar --add item yabai_mode left \
+           --set yabai_mode "${hover_button[@]}" \
+             icon.font="$ICON_FONT:Semibold:$FONT_SIZE_TEXT.0" \
+             icon.color=$ICON_COLOR \
              label.drawing=off \
+             update_freq=3 \
+             script="$PLUGIN_DIR/yabai_mode.sh" \
+             click_script="$PLUGIN_DIR/yabai_mode_click.sh; $PLUGIN_DIR/yabai_mode.sh" \
+           --subscribe yabai_mode space_change mouse.entered mouse.exited
+pill_edge left_end left
+
+# -- RIGHT SIDE ITEMS -- (added right-to-left: first added = rightmost)
+pill_edge right_end right
+
+# Controls: one gear that opens a menu of the rarely-used actions (yabai on/off,
+# color scheme, reload) so they don't occupy prime bar space. The menu hangs off
+# the pill's right end (right_end hosts the popup) and the gear shows a pressed
+# capsule while it's open, so the two read as one control.
+MENU="$PLUGIN_DIR/controls.sh"
+MENU_W=$((BASE_UNIT * 50))                          # 200px: fixed row width so hover capsules align
+sketchybar --set right_end \
+             popup.align=right \
+             popup.y_offset=-$(((HEIGHT_L1 - PILL_HEIGHT) / 2)) \
+             popup.height=$PILL_HEIGHT \
+             popup.background.drawing=on \
+             popup.background.color="0xf0${PILL_COLOR_1:4}" \
+             popup.background.corner_radius=$RADIUS_L2 \
+           --add item controls right \
+           --set controls "${hover_button[@]}" \
+             icon=$CONTROLS_ICON \
+             icon.font="$ICON_FONT:Semibold:$FONT_SIZE_TEXT.0" \
+             icon.color=$ICON_COLOR \
+             label.drawing=off \
+             click_script="$MENU toggle" \
+             script="$MENU" \
+           --subscribe controls mouse.entered mouse.exited mouse.exited.global
+
+# Menu rows: fixed width, icons on a fixed column so labels align, capsule on hover
+menu_row=(
+  width=$MENU_W
+  icon.font="$ICON_FONT:Semibold:$FONT_SIZE_TEXT.0"
+  icon.color=$ICON_COLOR
+  icon.width=$((FONT_SIZE_TEXT + PADDING_M))
+  icon.padding_left=$PADDING_M
+  label.font="$TEXT_FONT:Semibold:$FONT_SIZE_TEXT.0"
+  label.color=$RIGHT_TEXT_COLOR
+  label.padding_left=$GAP_ICON_LABEL
+  padding_left=$PADDING_S
+  padding_right=$PADDING_S
+  background.color=$PILL_COLOR_3
+  background.height=$CAPSULE_HEIGHT
+  background.corner_radius=$CAPSULE_RADIUS
+  background.drawing=off                            # last: setting a color re-enables drawing
+  script="$PLUGIN_DIR/hover.sh"
+)
+
+sketchybar --add item yabai.toggle popup.right_end \
+           --set yabai.toggle "${menu_row[@]}" \
+             update_freq=30 \
              script="$PLUGIN_DIR/yabai_state_display.sh" \
-             update_freq=30
+             click_script="$PLUGIN_DIR/toggle_yabai.sh; $MENU close" \
+           --subscribe yabai.toggle mouse.entered mouse.exited
 
-# -- RIGHT SIDE ITEMS --
+sketchybar --add item color_scheme popup.right_end \
+           --set color_scheme "${menu_row[@]}" \
+             icon=$SCHEME_ICON \
+             label="Color scheme: $(cat "$HOME/.cache/sketchybar/current_scheme")" \
+             click_script="$MENU close; $PLUGIN_DIR/color_scheme_click.sh" \
+           --subscribe color_scheme mouse.entered mouse.exited
 
-# Sketchybar reload button
-sketchybar --add item reload.bar right \
-           --set reload.bar \
+sketchybar --add item reload.bar popup.right_end \
+           --set reload.bar "${menu_row[@]}" \
              icon=$RELOAD_ICON \
-             icon.font="$ICON_FONT:Semibold:$FONT_SIZE_LARGE.0" \
-             icon.color=$RIGHT_TEXT_COLOR \
-             icon.padding_left=8 \
-             icon.padding_right=4 \
-             icon.align=center \
-             align=center \
-             background.drawing=off \
-             click_script="$PLUGIN_DIR/reload_sketchybar.sh" \
-             label.drawing=off
+             label="Reload bar" \
+             click_script="$MENU close; $PLUGIN_DIR/reload_sketchybar.sh" \
+           --subscribe reload.bar mouse.entered mouse.exited
 
-# Color Scheme item
-sketchybar --add item color_scheme right \
-           --set color_scheme \
-                 icon=$SCHEME_ICON \
-                 icon.font="$ICON_FONT:Semibold:$FONT_SIZE_LARGE.0" \
-                 icon.color=$RIGHT_TEXT_COLOR \
-                 icon.padding_left=4 \
-                 icon.padding_right=8 \
-                 label="" \
-                 label.padding_right=0 \
-                 label.padding_left=0 \
-                 background.drawing=off \
-                 padding_left=0 \
-                 padding_right=0 \
-                 click_script="$HOME/.config/sketchybar/plugins/color_scheme_click.sh"
-
-# Clock
+# Clock (h:mm AM/PM): time = icon (Heavy, the bar's primary item), AM/PM = label.
+# No seconds: SF Pro's proportional digits would visibly wobble every second.
 sketchybar --add item clock right \
-           --set clock \
-           icon.position=right \
-           icon.color=$RIGHT_TEXT_COLOR \
-           label="Initial" \
-           label.font="$TEXT_FONT:Heavy:$FONT_SIZE_LARGE.0" \
-           label.color=$RIGHT_TEXT_COLOR \
-           label.padding_right=15 \
-           label.padding_left=0 \
-           padding.left=5 \
-           padding.right=0 \
-           update_freq=10 \
-           script="$PLUGIN_DIR/clock.sh"
-      
+           --set clock icon.font="$TEXT_FONT:Heavy:$FONT_SIZE_TEXT.0" \
+                 icon.color=$RIGHT_TEXT_COLOR \
+                 icon.width=$CLOCK_WIDTH \
+                 icon.align=right \
+                 icon.padding_right=$GAP_ICON_LABEL \
+                 label.font="$TEXT_FONT:Semibold:$FONT_SIZE_SECONDARY.0" \
+                 label.color=$RIGHT_TEXT_COLOR \
+                 label.y_offset=$((GLYPH_LIFT - 1)) \
+                 update_freq=10 \
+                 script="$PLUGIN_DIR/clock.sh"
+
 # Calendar
 sketchybar --add item calendar right  \
            --set calendar  \
-             icon=􀧞  \
-             icon.color=$RIGHT_TEXT_COLOR \
+             icon=􀉉  \
+             icon.color=$ICON_COLOR \
              label="Initial"  \
              label.color=$RIGHT_TEXT_COLOR \
-             label.padding=0 \
-             padding_left=5 \
-             padding_right=0 \
              update_freq=600 \
              script="$PLUGIN_DIR/calendar.sh"
 
-source $ITEM_DIR/volume.sh
+# Right side is added right-to-left, so this reads (left→right): media, volume, battery, cpu
 source $ITEM_DIR/cpu.sh
 source $ITEM_DIR/battery.sh
+source $ITEM_DIR/volume.sh
 source $ITEM_DIR/media.sh
+pill_edge right_start right
 
 # Dynamic space brackets (handles any number of spaces across displays)
 source $ITEM_DIR/space_brackets.sh
 
-# Front app container pill (PILL LEVEL 2) - separate from spaces
-sketchybar --add bracket front_app_bracket front_app \
-           --set front_app_bracket background.color=$PILL_COLOR_2 \
-                                  background.height=$HEIGHT_L3 \
-                                  background.corner_radius=$RADIUS_L2 \
-                                  border_color=$PILL_LEVEL_2_BORDER \
-                                  border_width=$BORDER_THICK \
-                                  padding_left=$PADDING_M \
-                                  padding_right=$PADDING_L \
-                                  y_offset=$Y_OFFSET
-
 # Right pill: system info and controls (PILL LEVEL 1)
-sketchybar --add bracket right_bracket media battery cpu volume volume_icon calendar clock color_scheme reload.bar \
+sketchybar --add bracket right_bracket right_start media battery cpu volume volume_icon calendar clock controls right_end \
            --set right_bracket background.color=$PILL_COLOR_1 \
-                               background.height=$HEIGHT_L2 \
-                               background.corner_radius=$RADIUS_L1 \
-                               border_color=$PILL_LEVEL_2_BORDER \
-                               border_width=$BORDER_THIN \
+                               background.height=$PILL_HEIGHT \
+                               background.corner_radius=$PILL_RADIUS \
                                y_offset=$Y_OFFSET
-
-# Add smaller control buttons pill on top of right bracket (PILL LEVEL 2)
-sketchybar --add bracket control_bracket reload.bar color_scheme \
-           --set control_bracket background.color=$PILL_COLOR_2 \
-                                background.height=$HEIGHT_L3 \
-                                background.corner_radius=$RADIUS_L2 \
-                                border_color=$PILL_LEVEL_2_BORDER \
-                                border_width=$BORDER_THICK \
-                                y_offset=$Y_OFFSET
 
 # Force correct item ordering (survives reloads where items already exist)
 SPACES_JSON=$(yabai -m query --spaces 2>/dev/null)
@@ -252,7 +289,7 @@ if [ -n "$SPACES_JSON" ] && [ "$SPACES_JSON" != "null" ]; then
     for sid in $(echo "$SPACES_JSON" | jq -r '.[].index'); do
         REORDER_ARGS+="space.$sid space_icons.$sid "
     done
-    sketchybar --reorder $REORDER_ARGS space_separator front_app yabai_mode yabai.toggle
+    sketchybar --reorder left_edge $REORDER_ARGS space_separator front_app yabai_mode left_end
 fi
 
 ##### Force all scripts to run the first time (never do this in a script) #####

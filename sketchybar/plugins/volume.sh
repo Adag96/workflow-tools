@@ -2,6 +2,14 @@
 
 WIDTH=100
 ICONS_VOLUME=(􀊣 􀊡 􀊥 􀊧 􀊩)
+ICON_FIXED=${ICONS_VOLUME[4]}   # hardware-volume devices: the normal speaker icon, never "muted"
+
+# Audio interfaces like the UA Apollo have no software volume: macOS reports
+# "missing value" and sketchybar's volume_change sends 0, which used to show "muted".
+# osascript can hang on stalled Apple Events, so it's alarm-killed after 5s.
+software_volume() {
+  perl -e 'alarm 5; exec @ARGV' osascript -e 'output volume of (get volume settings)' 2>/dev/null
+}
 
 get_icon_for_volume() {
   local vol=$1
@@ -28,6 +36,10 @@ get_icon_for_volume() {
 }
 
 volume_change() {
+  if [ "$(software_volume)" = "missing value" ]; then
+    sketchybar --set volume_icon icon=$ICON_FIXED
+    return
+  fi
   ICON=$(get_icon_for_volume "$INFO")
   sketchybar --set volume_icon icon=$ICON
 
@@ -53,6 +65,11 @@ routine_update() {
   VOLUME=$(perl -e 'alarm 5; exec @ARGV' osascript -e 'output volume of (get volume settings)' 2>/dev/null)
   MUTED=$(perl -e 'alarm 5; exec @ARGV' osascript -e 'output muted of (get volume settings)' 2>/dev/null)
 
+  if [ "$VOLUME" = "missing value" ]; then
+    sketchybar --set volume_icon icon=$ICON_FIXED
+    return
+  fi
+
   # Handle muted state
   if [ "$MUTED" = "true" ]; then
     VOLUME=0
@@ -68,10 +85,12 @@ mouse_clicked() {
 }
 
 mouse_entered() {
+  [ "$NAME" = "volume_icon" ] && exec "$(dirname "$0")/hover.sh"
   sketchybar --set volume slider.knob.drawing=on
 }
 
 mouse_exited() {
+  [ "$NAME" = "volume_icon" ] && exec "$(dirname "$0")/hover.sh"
   sketchybar --set volume slider.knob.drawing=off
 }
 

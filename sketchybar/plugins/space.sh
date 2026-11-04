@@ -9,9 +9,7 @@
 export SCALE_FACTOR=10
 BASE_UNIT_RAW=4
 export BASE_UNIT=$((BASE_UNIT_RAW * SCALE_FACTOR / 10))
-export RADIUS_L4=$((BASE_UNIT * 2))
-export HEIGHT_L4=$((BASE_UNIT * 5))
-export FONT_SIZE_LARGE=$((BASE_UNIT * 4))
+export FONT_SIZE_TEXT=$((BASE_UNIT * 15 / 4))  # keep in sync with sketchybarrc type scale
 
 # Load the color scheme
 source "$HOME/.config/sketchybar/items/scheme.sh"
@@ -25,6 +23,9 @@ if [ -z "$ACCENT_COLOR" ] || [ -z "$LEFT_TEXT_COLOR" ] || [ -z "$PILL_COLOR_4" ]
   get_colors "$(cat "$COLOR_SCHEME_CACHE" 2>/dev/null)"
   [ -z "$ACCENT_COLOR" ] || [ -z "$LEFT_TEXT_COLOR" ] || [ -z "$PILL_COLOR_4" ] && exit 0
 fi
+# Number inset: space padding (PILL_EDGE 3) + icon.padding_left 10 = 13 = the capsule radius,
+# so the number clears the capsule's rounded end. Inactive spaces drop to the scheme's subtle tone; schemes without one fall back to text.
+INACTIVE_COLOR=${SUBTLE_TEXT_COLOR:-$LEFT_TEXT_COLOR}
 
 # Latest-wins guard: if another instance is mid-update, flag it to run one more
 # pass with fresh state and exit. Prevents pileup AND out-of-order updates.
@@ -71,16 +72,16 @@ while :; do
       ARGS+=(--set "space.$sid" background.drawing=off \
                                icon.color=$ACCENT_COLOR \
                                icon.highlight_color=$ACCENT_COLOR \
-                               icon.font="SF Pro:Bold:$FONT_SIZE_LARGE.0" \
-                               icon.padding_left=6 \
-                               icon.padding_right=0 \
+                               icon.font="SF Pro:Heavy:$FONT_SIZE_TEXT.0" \
+                               icon.padding_left=10 \
+                               icon.padding_right=4 \
                                associated_display=$display)
+      # Space capsule groups number + icons; the inner icon pill separates the
+      # windows from the number while keeping them one group.
       ARGS+=(--set "space_${sid}_bracket" background.drawing=on)
       if [ "${windows:-0}" -gt 0 ]; then
         ARGS+=(--set "space_icons.$sid" background.drawing=on \
                                         background.color=$PILL_COLOR_4 \
-                                        background.corner_radius=$RADIUS_L4 \
-                                        background.height=$HEIGHT_L4 \
                                         label.color=$LEFT_TEXT_COLOR \
                                         associated_display=$display)
       else
@@ -92,15 +93,15 @@ while :; do
       # highlight_color preset so the native highlight flip at the moment of
       # switching to this space is instantly accent-colored, not black.
       ARGS+=(--set "space.$sid" background.drawing=off \
-                               icon.color=$LEFT_TEXT_COLOR \
+                               icon.color=$INACTIVE_COLOR \
                                icon.highlight_color=$ACCENT_COLOR \
-                               icon.font="SF Pro:Regular:$FONT_SIZE_LARGE.0" \
-                               icon.padding_left=0 \
-                               icon.padding_right=0 \
+                               icon.font="SF Pro:Heavy:$FONT_SIZE_TEXT.0" \
+                               icon.padding_left=10 \
+                               icon.padding_right=4 \
                                associated_display=$display)
       ARGS+=(--set "space_${sid}_bracket" background.drawing=off)
       ARGS+=(--set "space_icons.$sid" background.drawing=off \
-                                      label.color=$LEFT_TEXT_COLOR \
+                                      label.color=$INACTIVE_COLOR \
                                       associated_display=$display)
     fi
   done < <(echo "$SPACES_JSON" | jq -r \

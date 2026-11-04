@@ -40,14 +40,14 @@ case "${PERCENTAGE}" in
   [1-2][0-9])
     sketchybar --set "$NAME" \
       icon="$BATTERY_LOW" \
-      icon.color=0xfff7941c \
+      icon.color=${WARN_COLOR:-0xfff7941c} \
       label="${PERCENTAGE}%" \
       label.color=$RIGHT_TEXT_COLOR
     ;;
   *)
     sketchybar --set "$NAME" \
       icon="$BATTERY_CRIT" \
-      icon.color=0xffee1924 \
+      icon.color=${CRITICAL_COLOR:-0xffee1924} \
       label="${PERCENTAGE}%"
     ;;
 esac

@@ -11,12 +11,12 @@ else
 fi
 
 sketchybar --add item media right \
-          --set media label.color=$MEDIA_COLOR \
+          --set media label.color=$RIGHT_TEXT_COLOR \
                       label.max_chars=$MAX_CHARS \
                       icon.padding_left=0 \
                       scroll_texts=on \
                       icon=􀑪 \
-                      icon.color=$MEDIA_COLOR \
+                      icon.color=$ICON_COLOR \
                       background.drawing=off \
                       script="$PLUGIN_DIR/media.sh" \
           --subscribe media media_change

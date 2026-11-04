@@ -32,30 +32,17 @@ for sid in "${SPACE_SIDS[@]}"; do
 done
 
 # Left pill: all spaces, front app, and yabai controls (PILL LEVEL 1)
-sketchybar --add bracket left_bracket $ALL_SPACE_ITEMS space_separator front_app yabai_mode yabai.toggle \
+sketchybar --add bracket left_bracket left_edge $ALL_SPACE_ITEMS space_separator front_app yabai_mode left_end \
            --set left_bracket background.color=$PILL_COLOR_1 \
-                              background.height=$HEIGHT_L2 \
-                              background.corner_radius=$RADIUS_L1 \
-                              border_color=$PILL_LEVEL_2_BORDER \
-                              border_width=$BORDER_THIN \
+                              background.height=$PILL_HEIGHT \
+                              background.corner_radius=$PILL_RADIUS \
                               y_offset=$Y_OFFSET
 
-# Spaces container pill (PILL LEVEL 2) - contains all spaces and their icons
-sketchybar --add bracket spaces_bracket $ALL_SPACE_ITEMS \
-           --set spaces_bracket background.color=$PILL_COLOR_2 \
-                               background.height=$HEIGHT_L3 \
-                               background.corner_radius=$RADIUS_L2 \
-                               border_color=$PILL_LEVEL_2_BORDER \
-                               border_width=$BORDER_THICK \
-                               padding_left=$PADDING_L \
-                               padding_right=$PADDING_M \
-                               y_offset=$Y_OFFSET
-
-# Individual space + icons pills (PILL LEVEL 3) - concentric within spaces container
+# Active-space highlight (PILL LEVEL 2) - drawn only for the visible space (see plugins/space.sh)
 for sid in "${SPACE_SIDS[@]}"; do
     sketchybar --add bracket space_${sid}_bracket space.$sid space_icons.$sid \
                --set space_${sid}_bracket background.color=$PILL_COLOR_3 \
-                                    background.height=$HEIGHT_L4 \
-                                    background.corner_radius=$RADIUS_L3 \
+                                    background.height=$CAPSULE_HEIGHT \
+                                    background.corner_radius=$CAPSULE_RADIUS \
                                     y_offset=$Y_OFFSET
 done

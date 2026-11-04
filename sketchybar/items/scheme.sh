@@ -24,121 +24,60 @@ if [ ! -f "$COLOR_SCHEME_CACHE" ]; then
   echo "KANDY" > "$COLOR_SCHEME_CACHE"
 fi
 
-# Color definitions based on scheme
-
-# Active space text color and media color should match
-
+# Color roles — every scheme must define all of these (nothing else is read):
+#   PILL_COLOR_1      outer pill background (with alpha; the gear menu uses it opaque)
+#   PILL_COLOR_3      active-space capsule, gear-menu hover row
+#   PILL_COLOR_4      icon pill inside the active space, front-app pill, button hover
+#   TEXT_COLOR        all text and icons (LEFT_/RIGHT_TEXT_COLOR are aliases)
+#   SUBTLE_TEXT_COLOR inactive spaces only — means "inactive", never use for live controls
+#   ACCENT_COLOR      "where you are": active space number + front-app icon
+#   WARN_COLOR        low battery
+#   CRITICAL_COLOR    critical battery
 get_colors() {
   local scheme=$1
   case $scheme in
-    "KANDY")
-      export BAR_COLOR=0xff3C4CA6
-      export LEFT_ITEM_COLOR=0xffD996C7
-      export LEFT_ITEM_FEEDBACK_COLOR=0xff9D7191
-      export LEFT_TEXT_COLOR=0xffD996C7
-      export LEFT_TEXT_FEEDBACK_COLOR=0xff313E89
-      export ACTIVE_SPACE_ITEM_COLOR=0xffD996C7
-      export ACTIVE_SPACE_TEXT_COLOR=0xff3C4CA6
-      export RIGHT_ITEM_COLOR=0xffD996C7
-      export RIGHT_ITEM_FEEDBACK_COLOR=0xff9D7191
-      export RIGHT_TEXT_COLOR=0xff3C4CA6
-      export RIGHT_TEXT_FEEDBACK_COLOR=0xff313E89
-      export MEDIA_COLOR=0xffD996C7
+    "KANDY")       # dark blue + candy pink
+      export PILL_COLOR_1=0xc8313E89
+      export PILL_COLOR_3=0xff3C4CA6
+      export PILL_COLOR_4=0xff5563C0
+      export TEXT_COLOR=0xfff4dcee
+      export SUBTLE_TEXT_COLOR=0xffb48fab
       export ACCENT_COLOR=0xffD959AC
-      
-      # NEW: Nested Pill Color Ramp
-      export PILL_COLOR_1=0xaa3C4CA6  # Main container backgrounds (more transparent)
-      export PILL_COLOR_2=0xffD996C7  # Active space and front app backgrounds
-      export PILL_COLOR_3=0xff9D7191  # Placeholder for future use
-      export PILL_COLOR_4=0xffD959AC  # Placeholder for future use
+      export WARN_COLOR=0xfff6c177
+      export CRITICAL_COLOR=0xffff6b8b
       ;;
-    "DEUS")
-      export BAR_COLOR=0xffffffff  
-      export LEFT_ITEM_COLOR=0xff6A8C61
-      export LEFT_ITEM_FEEDBACK_COLOR=0xff546F4D
-      export LEFT_TEXT_COLOR=0xff6A8C61
-      export LEFT_TEXT_FEEDBACK_COLOR=0xffC5C5C5
-      export ACTIVE_SPACE_ITEM_COLOR=0xff6A8C61
-      export ACTIVE_SPACE_TEXT_COLOR=0xfffda1d7  
-      export RIGHT_ITEM_COLOR=0xff6A8C61
-      export RIGHT_ITEM_FEEDBACK_COLOR=0xff546F4D
-      export RIGHT_TEXT_COLOR=0xffffffff  
-      export RIGHT_TEXT_FEEDBACK_COLOR=0xffC5C5C5
-      export MEDIA_COLOR=0xfffda1d7    
-      export ACCENT_COLOR=0xffF288C2   
-
-      # NEW: Nested Pill Color Ramp
-      export PILL_COLOR_1=0xaaffffff  # Main container backgrounds (more transparent)
-      export PILL_COLOR_2=0xff6A8C61  # Active space and front app backgrounds
-      export PILL_COLOR_3=0xff546F4D  # Placeholder for future use
-      export PILL_COLOR_4=0xffF288C2  # Placeholder for future use
-
-      # COLOR PALETTE:
-      # 0xffD9D2D5
-      # 0xfffda1d7
-      # 0xff6A8C61
-      # 0xff736D6C
+    "DEUS")        # light: white + sage green + pink
+      export PILL_COLOR_1=0xc8ffffff
+      export PILL_COLOR_3=0xffD9D2D5
+      export PILL_COLOR_4=0xffC9D8C4
+      export TEXT_COLOR=0xff3F5539
+      export SUBTLE_TEXT_COLOR=0xff8A9A86
+      export ACCENT_COLOR=0xffD6458F
+      export WARN_COLOR=0xffC98A2E
+      export CRITICAL_COLOR=0xffC0392B
       ;;
-    "BONEYARD")
-      export BAR_COLOR=0xffdee5de
-      export LEFT_ITEM_COLOR=0xff816f65
-      export LEFT_ITEM_FEEDBACK_COLOR=0xff65574E
-      export LEFT_TEXT_COLOR=0xff816f65
-      export LEFT_TEXT_FEEDBACK_COLOR=0xffA6ABA6
-      export ACTIVE_SPACE_ITEM_COLOR=0xffaa2224
-      export ACTIVE_SPACE_TEXT_COLOR=0xffdee5de
-      export RIGHT_ITEM_COLOR=0xff816f65
-      export RIGHT_ITEM_FEEDBACK_COLOR=0xff65574E
-      export RIGHT_TEXT_COLOR=0xffdee5de
-      export RIGHT_TEXT_FEEDBACK_COLOR=0xffA6ABA6
-      export MEDIA_COLOR=0xffaa2224
-      export ACCENT_COLOR=0xffd89048
-
-      # NEW: Nested Pill Color Ramp
-      export PILL_COLOR_1=0xaadee5de  # Main container backgrounds (more transparent)
-      export PILL_COLOR_2=0xffaa2224  # Active space and front app backgrounds
-      export PILL_COLOR_3=0xff816f65  # Placeholder for future use
-      export PILL_COLOR_4=0xffd89048  # Placeholder for future use
-
-      # COLOR PALETTE:
-      # 0xff816f65 brown
-      # 0xffd89048 orange
-      # 0xffdee5de white
-      # 0xffaa2224 red
+    "BONEYARD")    # light: bone + brown + red
+      export PILL_COLOR_1=0xc8dee5de
+      export PILL_COLOR_3=0xffC9CFC8
+      export PILL_COLOR_4=0xffB8ADA6
+      export TEXT_COLOR=0xff4A3F39
+      export SUBTLE_TEXT_COLOR=0xff8F8580
+      export ACCENT_COLOR=0xffaa2224
+      export WARN_COLOR=0xffd89048
+      export CRITICAL_COLOR=0xffaa2224
       ;;
-
-    "MOON")
-      export BAR_COLOR=0x80414354
-      
-      # Set a darker background for items, and keep text light for contrast
-      export LEFT_ITEM_COLOR=0xff393552
-      export LEFT_ITEM_FEEDBACK_COLOR=0xff6e6a86
-      export LEFT_TEXT_COLOR=0xffe0def4
-      export LEFT_TEXT_FEEDBACK_COLOR=0xff393552
-
-      # Use a bright accent for the active space background
-      export ACTIVE_SPACE_ITEM_COLOR=0xffc4a7e7
-      export ACTIVE_SPACE_TEXT_COLOR=0xff232136
-
-      # Set a darker background for items, and keep text light for contrast
-      export RIGHT_ITEM_COLOR=0xff393552
-      export RIGHT_ITEM_FEEDBACK_COLOR=0xff6e6a86
-      export RIGHT_TEXT_COLOR=0xffe0def4
-      export RIGHT_TEXT_FEEDBACK_COLOR=0xff393552
-
-      export MEDIA_COLOR=0xfff6c177
-      export ACCENT_COLOR=0xffeb6f92
-
-      # NEW: Nested Pill Color Ramp
-      export PILL_COLOR_1=0xaa26303C  # Main container backgrounds (with transparency)
-      export PILL_COLOR_2=0xff393552  # Group containers
-      export PILL_COLOR_3=0xff43415A  # Individual space containers 
-      export PILL_COLOR_4=0xff56526E  # Space icons (innermost)
-      
-      # Border color for Pill Level 2
-      export PILL_LEVEL_2_BORDER=0xff43415A  # 2px outline for level 2
+    "MOON")        # Rosé Pine Moon
+      export PILL_COLOR_1=0xc8232136   # base, ~78% opaque (wallpaper shows through softly)
+      export PILL_COLOR_3=0xff43415A   # highlight med
+      export PILL_COLOR_4=0xff56526E   # highlight high
+      export TEXT_COLOR=0xffe0def4     # text
+      export SUBTLE_TEXT_COLOR=0xff908caa
+      export ACCENT_COLOR=0xffeb6f92   # love
+      export WARN_COLOR=0xfff6c177     # gold
+      export CRITICAL_COLOR=0xffeb6f92 # love
       ;;
   esac
+  export LEFT_TEXT_COLOR=$TEXT_COLOR RIGHT_TEXT_COLOR=$TEXT_COLOR
 }
 
 toggle_scheme() {

@@ -1,11 +1,12 @@
 #!/bin/bash
 
+# CPU: the number sits in a fixed, right-aligned box (CPU_WIDTH), so it never
+# pushes its neighbours around as the value changes.
 sketchybar --add item cpu right \
            --set cpu update_freq=2 \
-                     icon=􀫥 \
-                     icon.color=$RIGHT_TEXT_COLOR \
+                     icon=􀧓 \
+                     icon.color=$ICON_COLOR \
+                     label.width=$CPU_WIDTH \
+                     label.align=right \
                      label.color=$RIGHT_TEXT_COLOR \
-                     padding_left=5 \
-                     padding_right=0 \
-                     script="$PLUGIN_DIR/cpu.sh" \
-                     NAME=cpu
+                     script="$PLUGIN_DIR/cpu.sh"

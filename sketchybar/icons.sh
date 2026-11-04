@@ -20,10 +20,11 @@ export BATTERY_CRIT="􀛪"
 export BATTERY_CHARGING="􀢋"
 
 # Sketchybar reload icon
-export RELOAD_ICON="􂣾"
+export RELOAD_ICON="􀚂"   # arrow.clockwise.circle.fill
 
 # Color scheme selector icon
-export SCHEME_ICON="􀏅"
+export SCHEME_ICON="􀝦"   # paintpalette.fill
+export CONTROLS_ICON="􀣌" # gearshape.fill
 
 # Todo list icons
 export TODO_ICON="􀆅"        # checkmark

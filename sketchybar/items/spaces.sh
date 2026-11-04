@@ -24,12 +24,18 @@ if [ -z "$SPACES_JSON" ] || [ "$SPACES_JSON" = "null" ]; then
         sketchybar --add space space.$sid left \
                    --set space.$sid space=$sid \
                                     icon=$sid \
+                                    padding_left=$PILL_EDGE \
+                                    padding_right=0 \
                                     label.drawing=off
 
         sketchybar --add item space_icons.$sid left \
-                   --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_MEDIUM.0" \
-                                         label.padding_right=$PADDING_M \
-                                         label.padding_left=$PADDING_M \
+                   --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_TEXT.0" \
+                                         label.padding_right=$PADDING_S \
+                                         label.padding_left=$PADDING_S \
+                                         padding_left=0 \
+                                         padding_right=2 \
+                                         background.height=$ICON_PILL_HEIGHT \
+                                         background.corner_radius=$ICON_PILL_RADIUS \
                                          label.y_offset=-1 \
                                          background.drawing=off \
                                          icon.drawing=off
@@ -52,13 +58,19 @@ else
         sketchybar --add space space.$sid left \
                    --set space.$sid space=$sid \
                                     icon=$sid \
+                                    padding_left=$PILL_EDGE \
+                                    padding_right=0 \
                                     label.drawing=off \
                                     associated_display=$display_id
 
         sketchybar --add item space_icons.$sid left \
-                   --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_MEDIUM.0" \
-                                         label.padding_right=$PADDING_M \
-                                         label.padding_left=$PADDING_M \
+                   --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_TEXT.0" \
+                                         label.padding_right=$PADDING_S \
+                                         label.padding_left=$PADDING_S \
+                                         padding_left=0 \
+                                         padding_right=2 \
+                                         background.height=$ICON_PILL_HEIGHT \
+                                         background.corner_radius=$ICON_PILL_RADIUS \
                                          label.y_offset=-1 \
                                          background.drawing=off \
                                          icon.drawing=off \
@@ -84,11 +96,14 @@ sketchybar --add item spaces_watcher left \
                                 script="$PLUGIN_DIR/space.sh" \
            --subscribe spaces_watcher space_change display_change
 
+# Hidden host for space_windows.sh (updates each space's app icons). The ">"
+# glyph is no longer drawn — the gap + front-app pill already separate the groups.
 sketchybar --add item space_separator left \
-          --set space_separator icon=">" \
+          --set space_separator drawing=off \
+                               icon=">" \
                                icon.color=$LEFT_TEXT_COLOR \
-                               icon.font="$TEXT_FONT:Bold:$FONT_SIZE_MEDIUM.0" \
-                               icon.padding_left=4 \
+                               icon.font="$TEXT_FONT:Semibold:$FONT_SIZE_TEXT.0" \
+                               icon.padding_right=0 \
                                label.drawing=off \
                                background.drawing=off \
                                script="$PLUGIN_DIR/space_windows.sh" \

@@ -26,10 +26,6 @@ echo "Current scheme after toggle: $current_after" >> /tmp/scheme_debug.log
 #sketchybar --set color_scheme label="$current_after"
 
 # Log current color values
-echo "Current color values:" >> /tmp/scheme_debug.log
-echo "BAR_COLOR=$BAR_COLOR" >> /tmp/scheme_debug.log
-echo "LEFT_ITEM_COLOR=$LEFT_ITEM_COLOR" >> /tmp/scheme_debug.log
-echo "RIGHT_ITEM_COLOR=$RIGHT_ITEM_COLOR" >> /tmp/scheme_debug.log
 
 # Reload sketchybar to apply the new color scheme
 echo "Calling reload_sketchybar.sh" >> /tmp/scheme_debug.log
