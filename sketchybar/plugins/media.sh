@@ -13,11 +13,14 @@ command -v media-control >/dev/null 2>&1 || exit 0   # not installed: widget sta
 echo $$ > /tmp/sketchybar_media_watcher.pid           # items/media.sh kills this + children on reload
 rm -f /tmp/sketchybar_media_art_*                     # artwork left by a previous (killed) watcher
 
-ITEMS="media_gap media_start media.app media.title media.artist media.prev media.play media.next media_end media_bracket"
-HIDE_DELAY=8                                  # seconds a paused widget lingers (so "play" is still clickable)
+ITEMS="media_gap media_start media.app media.title media.artist media.eq.1 media.eq.2 media.eq.3 media.eq.4 media.prev media.play media.next media_end media_bracket"
+HIDE_DELAY=300                                # seconds a paused widget lingers (5 min: stays through normal pauses)
 HIDE_PID=/tmp/sketchybar_media_hide.pid
 ICON_PLAY="􀊄"                                 # play.fill
 ICON_PAUSE="􀊆"                                # pause.fill
+# Play/pause always shows the action: ⏸ while playing, ▶ while paused
+# Controls expanded by hover? (then the equalizer stays hidden/still)
+expanded() { [ "$(sketchybar --query media.play | jq -r '.icon.width')" -gt 0 ] 2>/dev/null; }
 SEP=$'\x1f'                                   # field separator (non-whitespace: empty fields survive)
 
 # Artwork: a circle concentric with the pill's rounded end (same inset all round).
@@ -71,6 +74,7 @@ media-control stream --no-diff --debounce=250 2>/dev/null | while IFS= read -r l
 
   # Nothing in Now Playing at all
   if [ -z "$title" ]; then
+    "$CONFIG_DIR/plugins/media_eq.sh" stop
     cancel_hide; set_drawing off || exit 0; VISIBLE=0; continue
   fi
 
@@ -107,11 +111,18 @@ media-control stream --no-diff --debounce=250 2>/dev/null | while IFS= read -r l
     cancel_hide
     sketchybar --set media.title label="$title" --set media.artist "${artist_set[@]}" \
                --set media.play icon="$ICON_PAUSE" || exit 0
-    [ "$VISIBLE" = 0 ] && set_drawing on
+    expanded || "$CONFIG_DIR/plugins/media_eq.sh" start
+    if [ "$VISIBLE" = 0 ]; then
+      set_drawing on
+      # Reappearing while the controls are expanded: keep the equalizer out of their way
+      expanded && sketchybar --set media.eq.1 drawing=off --set media.eq.2 drawing=off \
+                             --set media.eq.3 drawing=off --set media.eq.4 drawing=off
+    fi
     VISIBLE=1
   else
     sketchybar --set media.title label="$title" --set media.artist "${artist_set[@]}" \
                --set media.play icon="$ICON_PLAY" || exit 0
+    "$CONFIG_DIR/plugins/media_eq.sh" stop
     # Only a widget that's showing lingers; a paused track at startup stays hidden
     [ "$VISIBLE" = 1 ] && schedule_hide
     VISIBLE=0

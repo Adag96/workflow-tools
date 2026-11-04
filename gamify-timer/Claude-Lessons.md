@@ -88,3 +88,24 @@ because the sketchybar client aborts when `$USER` is unset.
    (`pwd.getpwuid`), since browsers launch hosts with a minimal environment.
 4. Test the host by running it as a script with framed stdin messages and
    `PYTHONDONTWRITEBYTECODE=1` (never `import host` from this dir — see above).
+
+## 2026-11-04 — One engine owns the session (replaces per-profile timers + reportTimer)
+
+**Category:** Architecture / data safety
+
+**What happened:** Each Brave profile ran its own Pomodoro in its service worker, so
+sessions fragmented across profiles, couldn't start from sketchybar and died with Brave.
+Moved the session into `gamify_engine.py` (LaunchAgent `com.gamifytimer.engine`,
+`install-engine.sh`); host.py forwards timer actions to its Unix socket, gamifyctl is the
+CLI (sketchybar uses it). The per-profile `reportTimer` mirror above is gone.
+
+**Rules:**
+1. Every data.json read-modify-write goes through `gamify_store.locked_data()` (flock on
+   `STATE_DIR/data.lock`). Never write data.json outside it — host processes run in parallel.
+2. Focus awards are idempotent by `sessionId`: never award without checking history for it.
+3. Credit maths is a port of the JS (`js_round` = JS Math.round). Changing it means
+   updating `tests/award_reference.js` and keeping `tests/run.sh` green.
+4. Tests use `GAMIFY_DATA_FILE` / `GAMIFY_STATE_DIR` / `GAMIFY_ENGINE_SOCK` temp paths and
+   `GAMIFY_QUIET=1` — never the real Dropbox data.json.
+5. Every Python entry point sets `sys.dont_write_bytecode = True` before importing
+   gamify_store (an `__pycache__` in this folder breaks the unpacked extension).

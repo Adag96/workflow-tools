@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+"""gamifyctl — command-line client for the Gamify Timer engine.
+
+  gamifyctl get                      current session (JSON)
+  gamifyctl start <minutes> [tag]    start a focus session
+  gamifyctl rest <minutes>           start a rest
+  gamifyctl pause | resume | toggle | cancel
+  gamifyctl tags                     the tags (JSON list: name, color, multiplier)
+"""
+import sys
+sys.dont_write_bytecode = True
+import json, os, socket
+
+SOCK = os.environ.get('GAMIFY_ENGINE_SOCK', os.path.expanduser(
+    os.path.join(os.environ.get('GAMIFY_STATE_DIR', '~/Library/Application Support/GamifyTimer'), 'engine.sock')))
+
+
+def call(msg, timeout=3):
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(timeout)
+    s.connect(SOCK)
+    s.sendall((json.dumps(msg) + '\n').encode())
+    buf = b''
+    while not buf.endswith(b'\n'):
+        chunk = s.recv(65536)
+        if not chunk:
+            break
+        buf += chunk
+    s.close()
+    return json.loads(buf)
+
+
+def main(argv):
+    if not argv:
+        print(__doc__.strip()); return 2
+    cmd, rest = argv[0], argv[1:]
+    if cmd == 'tags':                  # read straight from data.json (no engine needed)
+        import gamify_store as store
+        print(json.dumps(store.read_data().get('tags', []), ensure_ascii=False))
+        return 0
+    if cmd == 'start':
+        msg = {'action': 'start', 'minutes': int(rest[0]) if rest else 25, 'tag': ' '.join(rest[1:]) or None}
+    elif cmd == 'rest':
+        msg = {'action': 'startRest', 'minutes': int(rest[0]) if rest else 5}
+    elif cmd in ('get', 'pause', 'resume', 'toggle', 'cancel'):
+        msg = {'action': cmd}
+    else:
+        print(__doc__.strip()); return 2
+    try:
+        reply = call(msg)
+    except OSError as e:
+        print(json.dumps({'error': f'engine not reachable: {e}'})); return 1
+    print(json.dumps(reply))
+    return 1 if 'error' in reply else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main(sys.argv[1:]))

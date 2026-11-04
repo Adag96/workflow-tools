@@ -33,6 +33,7 @@ export CAPSULE_HEIGHT=$((BASE_UNIT * 13 / 2))         # 26px: active space, fron
 export CAPSULE_RADIUS=$((CAPSULE_HEIGHT / 2))
 export ICON_PILL_HEIGHT=$((BASE_UNIT * 11 / 2))       # 22px: icon pill inside the active space
 export ICON_PILL_RADIUS=$((ICON_PILL_HEIGHT / 2))
+export PILL_GAP=$BASE_UNIT                                # 4px between detached pills (timer, media)
 export PILL_EDGE=$(((PILL_HEIGHT - CAPSULE_HEIGHT) / 2))  # 3px  outer pill ↔ capsule, every side
 # Vertical optics (measured): SF Pro's cap-height centre and SF Symbols sit ~1pt below
 # the line-box centre, so every glyph is lifted 1pt; the pills themselves don't move.
@@ -51,6 +52,14 @@ export HEIGHT_L1=$((BASE_UNIT * 11))     # 44px @ scale 10
 export HEIGHT_L2=$((BASE_UNIT * 7))      # 28px @ scale 10
 export HEIGHT_L3=$((BASE_UNIT * 6))      # 24px @ scale 10
 export HEIGHT_L4=$((BASE_UNIT * 5))      # 20px @ scale 10
+
+# Drop-down menus hang from their button as a folder tab: the pressed capsule grows down
+# past the bar's bottom (clipped square there) into an opaque panel starting at the pill's
+# bottom. The panel's corner radius must fit in the 6px between pill bottom and bar bottom,
+# where the tab covers its top corner — so the seam disappears.
+export MENU_RADIUS=$(((HEIGHT_L1 - PILL_HEIGHT) / 2))     # 6px
+export MENU_TAB_HEIGHT=$((CAPSULE_HEIGHT + 24))          # pressed capsule while its menu is open…
+export MENU_TAB_OFFSET=-12                               # …top unchanged, bottom 24px lower
 
 # --- Border Scale ---
 export BORDER_THIN=1                     # 1px
@@ -175,24 +184,26 @@ sketchybar --add item yabai_mode left \
            --subscribe yabai_mode space_change mouse.entered mouse.exited
 pill_edge left_end left
 
+# Gamify Timer: its own pill — a clock button that expands into running Pomodoros
+source $ITEM_DIR/gamify.sh
+
 # -- RIGHT SIDE ITEMS -- (added right-to-left: first added = rightmost)
 pill_edge right_end right
 
 # Controls: one gear that opens a menu of the rarely-used actions (yabai on/off,
-# color scheme, reload) so they don't occupy prime bar space. The menu hangs off
-# the pill's right end (right_end hosts the popup) and the gear shows a pressed
-# capsule while it's open, so the two read as one control.
+# color scheme, reload) so they don't occupy prime bar space. While it's open the gear's
+# pressed capsule becomes a folder tab running down into the menu panel (popup on the
+# gear itself, right-aligned to it — see MENU_RADIUS), so the two read as one control.
 MENU="$PLUGIN_DIR/controls.sh"
 MENU_W=$((BASE_UNIT * 50))                          # 200px: fixed row width so hover capsules align
-sketchybar --set right_end \
+sketchybar --add item controls right \
+           --set controls "${hover_button[@]}" \
              popup.align=right \
              popup.y_offset=-$(((HEIGHT_L1 - PILL_HEIGHT) / 2)) \
              popup.height=$PILL_HEIGHT \
              popup.background.drawing=on \
-             popup.background.color="0xf0${PILL_COLOR_1:4}" \
-             popup.background.corner_radius=$RADIUS_L2 \
-           --add item controls right \
-           --set controls "${hover_button[@]}" \
+             popup.background.color=$PILL_COLOR_4 \
+             popup.background.corner_radius=$MENU_RADIUS \
              icon=$CONTROLS_ICON \
              icon.font="$ICON_FONT:Semibold:$FONT_SIZE_TEXT.0" \
              icon.color=$ICON_COLOR \
@@ -211,30 +222,30 @@ menu_row=(
   label.font="$TEXT_FONT:Semibold:$FONT_SIZE_TEXT.0"
   label.color=$RIGHT_TEXT_COLOR
   label.padding_left=$GAP_ICON_LABEL
-  padding_left=$PADDING_S
-  padding_right=$PADDING_S
+  padding_left=$PILL_EDGE                           # hover rows inset like capsules in a pill
+  padding_right=$PILL_EDGE
   background.color=$PILL_COLOR_3
   background.height=$CAPSULE_HEIGHT
-  background.corner_radius=$CAPSULE_RADIUS
+  background.corner_radius=$((MENU_RADIUS - PILL_EDGE))   # concentric with the panel
   background.drawing=off                            # last: setting a color re-enables drawing
   script="$PLUGIN_DIR/hover.sh"
 )
 
-sketchybar --add item yabai.toggle popup.right_end \
+sketchybar --add item yabai.toggle popup.controls \
            --set yabai.toggle "${menu_row[@]}" \
              update_freq=30 \
              script="$PLUGIN_DIR/yabai_state_display.sh" \
              click_script="$PLUGIN_DIR/toggle_yabai.sh; $MENU close" \
            --subscribe yabai.toggle mouse.entered mouse.exited
 
-sketchybar --add item color_scheme popup.right_end \
+sketchybar --add item color_scheme popup.controls \
            --set color_scheme "${menu_row[@]}" \
              icon=$SCHEME_ICON \
              label="Color scheme: $(cat "$HOME/.cache/sketchybar/current_scheme")" \
              click_script="$MENU close; $PLUGIN_DIR/color_scheme_click.sh" \
            --subscribe color_scheme mouse.entered mouse.exited
 
-sketchybar --add item reload.bar popup.right_end \
+sketchybar --add item reload.bar popup.controls \
            --set reload.bar "${menu_row[@]}" \
              icon=$RELOAD_ICON \
              label="Reload bar" \
@@ -274,8 +285,6 @@ pill_edge right_start right
 # Now Playing widget: its own pill, just left of the right pill (hidden unless playing)
 source $ITEM_DIR/media.sh
 
-# Gamify Timer widget: centered pill of running Pomodoros across Brave profiles
-source $ITEM_DIR/gamify.sh
 
 # Dynamic space brackets (handles any number of spaces across displays)
 source $ITEM_DIR/space_brackets.sh
@@ -294,7 +303,7 @@ if [ -n "$SPACES_JSON" ] && [ "$SPACES_JSON" != "null" ]; then
     for sid in $(echo "$SPACES_JSON" | jq -r '.[].index'); do
         REORDER_ARGS+="space.$sid space_icons.$sid "
     done
-    sketchybar --reorder left_edge $REORDER_ARGS space_separator front_app yabai_mode left_end
+    sketchybar --reorder left_edge $REORDER_ARGS space_separator front_app yabai_mode left_end gamify_gap gamify_start $GAMIFY_ITEMS gamify_end
 fi
 
 ##### Force all scripts to run the first time (never do this in a script) #####

@@ -103,3 +103,27 @@ Each lesson follows this structure:
 - **What happened**: The volume icon showed "muted" and the slider did nothing on the UA Apollo Twin X, yet the keyboard volume knob worked. Initially misdiagnosed as "the Apollo can't be controlled from the Mac".
 - **Root cause**: The Apollo exposes no CoreAudio volume/mute (`output volume` = "missing value"). SoundSource adds its own software volume for it and intercepts the volume keys; sketchybar's slider/volume_change only see macOS's volume. SoundSource has no AppleScript, only Shortcuts actions (Set Device Volume/Mute — no getter); its live level sits in a private archive (Sources.plist).
 - **Rule**: When `output volume` is "missing value", show `hifispeaker.fill` and keep the slider closed (plugins/volume.sh, volume_click.sh); devices with a macOS volume get the normal icons + slider. Don't read SoundSource's private files. UA Mixer Engine (TCP 4710) exposes the MONITOR output's CRMonitorLevel/Mute if hardware monitor control is ever wanted.
+
+### Fixed widths swallow padding — item `width`, `icon.width` and `label.width` alike
+- **Date**: 2026-11-04
+- **Category**: Sketchybar
+- **What happened**: Three separate spacing bugs today: "UJAM45m" (tag label.width ate its padding_right), a cramped timer icon (icon.width ate icon.padding_right), and media equalizer bars overlapping into a blob (item width=3 ate padding_left).
+- **Rule**: When a box has a fixed width, its own padding is ignored. Fold the gap into the width (label.width = text + gap), or size the content another way (bars: an empty `icon=""` with icon.width=3 keeps the item's padding). Verify spacing from bounding rects/screenshots, not from the config values.
+
+### Popups: one row OR one column; `--query` takes one item; exited.global is per window
+- **Date**: 2026-11-04
+- **Category**: Sketchybar
+- **What happened**: The Gamify start menu needed a chip row above a tag list. A popup is all-horizontal or all-vertical, so it's two popups: chips on a zero-width `gamify_anchor` (same x as the pill's start), tags on `gamify_start`, y_offsets stacked with PILL_GAP. The close-on-leave check first used `sketchybar --query a b`, which silently returns only `a`, so the menu closed under the cursor.
+- **Rule**: Stack popups via separate anchors + y_offset. Query items one per call. `mouse.exited.global` fires when the cursor leaves the bar or any popup window — but not reliably when it leaves the bar straight after a click, and never while it slides along the bar — so menus also run the close check from the trigger items' `mouse.exited`, and every close re-checks the real cursor (JXA `NSEvent.mouseLocation`, as in gamify_menu.sh/media_hover.sh). A popup item's bounding_rect is in bar coordinates (top-left origin), usable for that check.
+
+### sketchybar can't see horizontal scroll; JXA can't synthesize it
+- **Date**: 2026-11-04
+- **Category**: Sketchybar
+- **What happened**: Swipe-to-spin for the Gamify length carousel. `mouse.scrolled` fires for a sideways swipe but `SCROLL_DELTA`/`INFO.delta` is the vertical axis only (always 0). Testing was also misleading: JXA's `CGEventCreateScrollWheelEvent` (variadic) drops wheel2, so synthetic horizontal scrolls arrived as dx=0.
+- **Rule**: Horizontal gestures need a helper: `plugins/gamify_scroll.swift` (NSEvent global scroll monitor — no permission needed for mouse events), built by items/gamify.sh into ~/.cache, run only while the menu is open and killed on close (it also self-exits when `gamify_menu.sh is_open` fails). Synthesize test scrolls from Swift (`CGEvent(scrollWheelEvent2Source:…)`), not JXA.
+
+### Folder-tab menus: extend the pressed capsule past the bar's bottom
+- **Date**: 2026-11-04
+- **Category**: Sketchybar
+- **What happened**: Drop-downs looked detached from their buttons. Sketchybar has no per-corner radii or custom shapes, but the bar window clips items at its bottom edge: growing the pressed capsule's background downward (height +24, y_offset −12 → top unchanged) clips its rounded bottom away, leaving a square-bottomed tab that runs into a popup anchored on the same item (y_offset −6 → starts at the pill's bottom). The panel's corner radius (MENU_RADIUS = 6) fits inside the tab's covered strip, so the seam disappears. Also: tokens derived from HEIGHT_L1 must be defined after it in sketchybarrc — an early definition silently produced −16 (shown as 4294967280).
+- **Rule**: Use MENU_RADIUS / MENU_TAB_HEIGHT / MENU_TAB_OFFSET for any new drop-down (gear: controls.sh; Gamify: gamify_menu.sh). Never clean up test items with a loose regex like `/p\..*/` — it matched real items (`gamify.step.prev`).

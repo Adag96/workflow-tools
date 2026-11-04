@@ -3,7 +3,11 @@
   "name": "Gamify Timer",
   "version": "1.0.0",
   "description": "Pomodoro timer that earns Focus Credits for guilt-free indulgences",
-  "permissions": ["storage", "alarms", "notifications", "offscreen", "nativeMessaging"],
+  "permissions": [
+    "storage",
+    "alarms",
+    "nativeMessaging"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -20,8 +24,14 @@
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
-  "web_accessible_resources": [{
-    "resources": ["sounds/*"],
-    "matches": ["<all_urls>"]
-  }]
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "sounds/*"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
 }

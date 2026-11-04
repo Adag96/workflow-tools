@@ -137,7 +137,9 @@ function setupTimerControls() {
       alert('Please select a tag before starting a session.');
       return;
     }
-    await chrome.runtime.sendMessage({ action: 'startSession', minutes: selectedMinutes, tag: selectedTag });
+    // One session at a time across all profiles + sketchybar (the engine refuses a second)
+    const result = await chrome.runtime.sendMessage({ action: 'startSession', minutes: selectedMinutes, tag: selectedTag });
+    if (result && result.error) alert(result.error);
     await loadState();
     render();
   });

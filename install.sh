@@ -43,6 +43,10 @@ for rcfile in .zshrc .p10k.zsh .condarc; do
   echo "Linked $rcfile"
 done
 
+# Gamify Timer engine (LaunchAgent): owns the shared focus session for every browser
+# profile and the sketchybar widget
+"$WORKFLOW_TOOLS_PATH/gamify-timer/install-engine.sh"
+
 # Initialize Yabai status file
 if pgrep -q yabai; then
   echo "running" > /tmp/yabai_status
