@@ -109,3 +109,24 @@ CLI (sketchybar uses it). The per-profile `reportTimer` mirror above is gone.
    `GAMIFY_QUIET=1` — never the real Dropbox data.json.
 5. Every Python entry point sets `sys.dont_write_bytecode = True` before importing
    gamify_store (an `__pycache__` in this folder breaks the unpacked extension).
+
+## 2026-11-05 — read_data() wiped balance + history by "resetting" a mid-sync file
+
+**Category:** Data safety / Dropbox File Provider
+
+**What happened:** Completing a 60-min focus session replaced data.json with factory
+defaults. Balance and history were gone, and the award itself got no streak bonus
+because it was computed against the defaults.
+
+**Root cause:** `gamify_store.read_data()` treated "file missing" (`os.path.exists`
+False) and "empty/invalid JSON" as a fresh install and wrote `defaults()` over the file.
+data.json lives in Dropbox's File Provider folder, where it can be briefly missing or
+half-written while a sync lands. The engine's unlocked readers (`watch_balance` polls
+every second, `publish`) and the locked award all go through read_data, so any read
+during that window permanently replaced the real data.
+
+**Rules:**
+1. Reading never writes. An unreadable data.json is retried, then raises. Never fall
+   back to defaults and save them.
+2. Recovery: Dropbox version history on data.json (dropbox.com → file → Version history)
+   holds the pre-wipe version. The `data.json.bak-*` files are older manual snapshots.

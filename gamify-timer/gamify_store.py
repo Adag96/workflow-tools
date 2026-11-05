@@ -19,6 +19,7 @@ import json
 import math
 import os
 import tempfile
+import time
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -67,31 +68,27 @@ def defaults():
 
 # ── data.json I/O ──────────────────────────────────────────────────────────────
 
-def read_data():
-    if not os.path.exists(DATA_FILE):
-        data = defaults()
-        write_data(data)
-        return data
-    try:
-        with open(DATA_FILE, 'r') as f:
-            fcntl.flock(f, fcntl.LOCK_SH)
-            try:
-                content = f.read()
-            finally:
-                fcntl.flock(f, fcntl.LOCK_UN)
-        if not content.strip():
-            raise ValueError('Empty data file')
-        data = json.loads(content)
-    except (json.JSONDecodeError, ValueError):
-        # Corrupt or empty file — preserve a backup and fall back to defaults
-        backup = DATA_FILE + '.corrupt'
+def read_data(attempts=5):
+    # data.json lives in Dropbox (File Provider), so it can be briefly missing, empty or
+    # half-written while a sync lands. NEVER treat that as "fresh install" and write
+    # defaults over it — that wipes balance + history. Retry, then raise; every caller
+    # already retries later (award) or keeps its last good state (widget, popup).
+    for attempt in range(attempts):
         try:
-            os.replace(DATA_FILE, backup)
-        except OSError:
-            pass
-        data = defaults()
-        write_data(data)
-        return data
+            with open(DATA_FILE, 'r') as f:
+                fcntl.flock(f, fcntl.LOCK_SH)
+                try:
+                    content = f.read()
+                finally:
+                    fcntl.flock(f, fcntl.LOCK_UN)
+            data = json.loads(content)
+            if not isinstance(data, dict):
+                raise ValueError('data.json is not an object')
+            break
+        except (OSError, ValueError) as e:      # JSONDecodeError is a ValueError
+            if attempt == attempts - 1:
+                raise RuntimeError(f'data.json unreadable ({e!r}); not touching it') from e
+            time.sleep(0.2)
     # Backfill missing top-level keys
     for key, default in DEFAULT_DATA.items():
         if key not in data:
