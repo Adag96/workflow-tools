@@ -52,5 +52,9 @@ yabai -m signal --add event=display_added action="$HOME/workflow-tools/sketchyba
 yabai -m signal --add event=display_removed action="$HOME/workflow-tools/sketchybar/plugins/display_watcher.sh &"
 yabai -m signal --add event=system_woke action="$HOME/workflow-tools/sketchybar/plugins/display_watcher.sh &"
 
+# Rebuild the bar's space items when spaces are added/removed
+yabai -m signal --add event=space_created action="$HOME/workflow-tools/sketchybar/plugins/space_count_changed.sh &"
+yabai -m signal --add event=space_destroyed action="$HOME/workflow-tools/sketchybar/plugins/space_count_changed.sh &"
+
 # Move windows to the display they are dragged to
 yabai -m signal --add event=window_moved action="$HOME/workflow-tools/scripts/move_window_to_display.sh \$YABAI_WINDOW_ID"

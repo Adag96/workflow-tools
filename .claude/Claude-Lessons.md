@@ -127,3 +127,17 @@ Each lesson follows this structure:
 - **Category**: Sketchybar
 - **What happened**: Drop-downs looked detached from their buttons. Sketchybar has no per-corner radii or custom shapes, but the bar window clips items at its bottom edge: growing the pressed capsule's background downward (height +24, y_offset −12 → top unchanged) clips its rounded bottom away, leaving a square-bottomed tab that runs into a popup anchored on the same item (y_offset −6 → starts at the pill's bottom). The panel's corner radius (MENU_RADIUS = 6) fits inside the tab's covered strip, so the seam disappears. Also: tokens derived from HEIGHT_L1 must be defined after it in sketchybarrc — an early definition silently produced −16 (shown as 4294967280).
 - **Rule**: Use MENU_RADIUS / MENU_TAB_HEIGHT / MENU_TAB_OFFSET for any new drop-down (gear: controls.sh; Gamify: gamify_menu.sh). Never clean up test items with a loose regex like `/p\..*/` — it matched real items (`gamify.step.prev`).
+
+### display_added fires before the new display has a space — never act on focus
+- **Date**: 2026-11-11
+- **Category**: Yabai
+- **What happened**: Plugging in the external monitor left 3 laptop spaces + 1 external space instead of 3 + 6. Log: "Display 2: creating 6 spaces (0 -> 6)" then "Display 1: removing 8 spaces (11 -> 3)". Separately, manually adding a desktop never showed up in the bar.
+- **Root cause**: At display_added time yabai lists the new display with `spaces: []`. `display --focus 2` failed (nothing to focus), so bare `space --create` used the laptop's active space, and the destroy pass deleted them all. The bar's space items are built once at rc load, and nothing rebuilt them on space_created/space_destroyed.
+- **Rule**: Never act once on a snapshot taken right after a hotplug/wake — the timing varies by monitor and connection. display_watcher is a converge loop: every round it re-reads real state, treats "a display with 0 spaces" as not-settled-yet, fixes what's off, and verifies next round (up to 20). Triggers that arrive mid-run wait for the lock instead of being dropped (no cooldown skip — runs are idempotent). Always `yabai -m space --create <display>` (explicit target), never focus-then-create. Space count changes go through `plugins/space_count_changed.sh` (debounced, defers to display_watcher so reloads never overlap).
+
+### Never destroy a space that has windows
+- **Date**: 2026-11-11
+- **Category**: Yabai
+- **What happened**: display_watcher's trim pass moved windows off "extra" spaces and destroyed them. It runs on system_woke too, so desktops Adam added (e.g. via the bar's "+") were wiped after every sleep, piling their windows onto the first space.
+- **Root cause**: Space targets (3 laptop / 6 external / 5 standalone) were treated as exact counts instead of defaults.
+- **Rule**: Targets are minimums for creation; the trim pass may only destroy *empty* spaces (`query --windows --space` length 0, which includes minimized/hidden). A space with windows is intentional — keep it, even if that leaves the display above target.

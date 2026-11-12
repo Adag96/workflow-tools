@@ -12,9 +12,9 @@ source "$HOME/.config/sketchybar/items/scheme.sh"
 current_scheme=$(cat "$HOME/.cache/sketchybar/current_scheme")
 get_colors "$current_scheme"
 
-if [ "$SENDER" = "space_windows_change" ]; then
- space="$(echo "$INFO" | jq -r '.space')"
- apps="$(echo "$INFO" | jq -r '.apps | keys[]')"
+# render_space <space> <apps, one per line> — paint one space's icon strip
+render_space() {
+ local space="$1" apps="$2"
 
  # Apps that appear on all spaces but shouldn't show in the icon strip
  EXCLUDED_APPS="Vowen"
@@ -58,4 +58,16 @@ if [ "$SENDER" = "space_windows_change" ]; then
    sketchybar --set space_icons.$space label="$icon_strip" \
                                       background.drawing=off
  fi
+}
+
+if [ "$SENDER" = "space_windows_change" ]; then
+ render_space "$(echo "$INFO" | jq -r '.space')" "$(echo "$INFO" | jq -r '.apps | keys[]')"
+elif [ "$SENDER" = "refresh_all" ]; then
+ # Called by space_sync.sh after spaces are added/removed: space numbers may
+ # have shifted, so repaint every strip from yabai's window list
+ WINDOWS_JSON=$(yabai -m query --windows 2>/dev/null)
+ for space in $(yabai -m query --spaces 2>/dev/null | jq -r '.[].index'); do
+   render_space "$space" "$(echo "$WINDOWS_JSON" | jq -r --argjson s "$space" \
+     '[.[] | select(.space == $s and (."is-minimized" | not)) | .app] | unique | .[]')"
+ done
 fi

@@ -17,73 +17,54 @@ for attempt in 1 2 3; do
     sleep 1
 done
 
+source "$ITEM_DIR/space_lib.sh"
+
 if [ -z "$SPACES_JSON" ] || [ "$SPACES_JSON" = "null" ]; then
     # Fallback to static spaces if yabai isn't running
     SPACE_SIDS=(1 2 3 4)
-    for sid in "${SPACE_SIDS[@]}"; do
-        sketchybar --add space space.$sid left \
-                   --set space.$sid space=$sid \
-                                    icon=$sid \
-                                    padding_left=$PILL_EDGE \
-                                    padding_right=0 \
-                                    label.drawing=off
-
-        sketchybar --add item space_icons.$sid left \
-                   --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_TEXT.0" \
-                                         label.padding_right=$PADDING_M \
-                                         label.padding_left=$PADDING_M \
-                                         padding_left=0 \
-                                         padding_right=2 \
-                                         background.height=$ICON_PILL_HEIGHT \
-                                         background.corner_radius=$ICON_PILL_RADIUS \
-                                         label.y_offset=-1 \
-                                         background.drawing=off \
-                                         icon.drawing=off
-    done
-
-    # Force correct ordering: space.N then space_icons.N for each space
+    SPACE_ARGS=()
     REORDER_ARGS=""
     for sid in "${SPACE_SIDS[@]}"; do
+        space_item_args $sid
         REORDER_ARGS+="space.$sid space_icons.$sid "
     done
+    sketchybar "${SPACE_ARGS[@]}"
     sketchybar --reorder $REORDER_ARGS
 else
-    # Parse spaces from yabai - get index and display for each
-    SPACE_COUNT=$(echo "$SPACES_JSON" | jq 'length')
+    SPACE_ARGS=()
+    while IFS=$'\t' read -r sid display_id; do
+        space_item_args $sid $display_id
+    done < <(echo "$SPACES_JSON" | jq -r '.[] | [.index, .display] | @tsv')
+    sketchybar "${SPACE_ARGS[@]}"
 
-    for ((i=0; i<SPACE_COUNT; i++)); do
-        sid=$(echo "$SPACES_JSON" | jq -r ".[$i].index")
-        display_id=$(echo "$SPACES_JSON" | jq -r ".[$i].display")
-
-        sketchybar --add space space.$sid left \
-                   --set space.$sid space=$sid \
-                                    icon=$sid \
-                                    padding_left=$PILL_EDGE \
-                                    padding_right=0 \
+    # "−" "+" buttons per display (after front_app — see sketchybarrc's final
+    # reorder): remove that display's visible desktop / add one. The bar's
+    # space items follow live via yabai's space signals (plugins/space_sync.sh).
+    for display_id in $(echo "$SPACES_JSON" | jq -r '[.[].display] | unique | .[]'); do
+        sketchybar --add item space_remove.$display_id left \
+                   --set space_remove.$display_id "${hover_button[@]}" \
+                                    icon="$SPACE_REMOVE_ICON" \
+                                    icon.color=$ICON_COLOR \
                                     label.drawing=off \
-                                    associated_display=$display_id
-
-        sketchybar --add item space_icons.$sid left \
-                   --set space_icons.$sid label.font="sketchybar-app-font:Regular:$FONT_SIZE_TEXT.0" \
-                                         label.padding_right=$PADDING_M \
-                                         label.padding_left=$PADDING_M \
-                                         padding_left=0 \
-                                         padding_right=2 \
-                                         background.height=$ICON_PILL_HEIGHT \
-                                         background.corner_radius=$ICON_PILL_RADIUS \
-                                         label.y_offset=-1 \
-                                         background.drawing=off \
-                                         icon.drawing=off \
-                                         associated_display=$display_id
+                                    associated_display=$display_id \
+                                    click_script="$PLUGIN_DIR/space_remove_click.sh $display_id" \
+                                    script="$PLUGIN_DIR/hover.sh" \
+                   --subscribe space_remove.$display_id mouse.entered mouse.exited
+        sketchybar --add item space_add.$display_id left \
+                   --set space_add.$display_id "${hover_button[@]}" \
+                                    icon="$SPACE_ADD_ICON" \
+                                    icon.color=$ICON_COLOR \
+                                    label.drawing=off \
+                                    associated_display=$display_id \
+                                    click_script="yabai -m space --create $display_id" \
+                                    script="$PLUGIN_DIR/hover.sh" \
+                   --subscribe space_add.$display_id mouse.entered mouse.exited
     done
 
-    # Force correct ordering: space.N then space_icons.N for each space
-    REORDER_ARGS=""
-    for ((i=0; i<SPACE_COUNT; i++)); do
-        sid=$(echo "$SPACES_JSON" | jq -r ".[$i].index")
-        REORDER_ARGS+="space.$sid space_icons.$sid "
-    done
-    sketchybar --reorder $REORDER_ARGS
+    # Reused by space_brackets.sh and sketchybarrc's final reorder
+    SPACE_ORDER=$(space_order "$SPACES_JSON")
+    SPACE_CONTROL_ITEMS=$(space_control_items "$SPACES_JSON")
+    sketchybar --reorder $SPACE_ORDER
 fi
 
 # Single hidden watcher drives styling for ALL space items via one batched
