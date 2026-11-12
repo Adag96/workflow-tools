@@ -12,7 +12,10 @@ source "$CONFIG_DIR/items/scheme.sh"
 source "$CONFIG_DIR/icons.sh"
 get_colors "$(cat "$HOME/.cache/sketchybar/current_scheme")"
 
-if launchctl print "gui/$(id -u)/com.koekeishiya.yabai" >/dev/null 2>&1; then
+# yabai's launchd label moved from com.koekeishiya.yabai to com.asmvik.yabai
+# (project moved orgs) — accept either
+if launchctl print "gui/$(id -u)/com.asmvik.yabai" >/dev/null 2>&1 \
+   || launchctl print "gui/$(id -u)/com.koekeishiya.yabai" >/dev/null 2>&1; then
   ICON="$YABAI_RUNNING_ICON"; LABEL="Yabai: on"
 else
   ICON="$YABAI_STOPPED_ICON"; LABEL="Yabai: off"

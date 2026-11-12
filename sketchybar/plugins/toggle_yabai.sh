@@ -2,7 +2,10 @@
 # Enable/disable yabai. Decides from the live launchd state, not a cached file,
 # so one click always does the opposite of what yabai is actually doing.
 
-if launchctl print "gui/$(id -u)/com.koekeishiya.yabai" >/dev/null 2>&1; then
+# yabai's launchd label moved from com.koekeishiya.yabai to com.asmvik.yabai
+# (project moved orgs) — accept either
+if launchctl print "gui/$(id -u)/com.asmvik.yabai" >/dev/null 2>&1 \
+   || launchctl print "gui/$(id -u)/com.koekeishiya.yabai" >/dev/null 2>&1; then
   yabai --stop-service
 else
   yabai --start-service

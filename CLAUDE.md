@@ -20,11 +20,12 @@ echo "adam ALL=(root) NOPASSWD: sha256:$(shasum -a 256 /opt/homebrew/bin/yabai |
 ```
 
 ### Debug Logs
-- Yabai daemon: `/tmp/yabai_$USER.err.log` (on/off state comes from `launchctl print gui/$(id -u)/com.koekeishiya.yabai`)
+- Yabai daemon: `/tmp/yabai_$USER.err.log` (on/off state comes from `launchctl print gui/$(id -u)/com.asmvik.yabai`; older installs used `com.koekeishiya.yabai`)
 - Display watcher: `/tmp/display_watcher.log`
 
 ### Dependencies
 - `jq` — used extensively for JSON manipulation across scripts
+- `media-control` (`brew install media-control`) — Now Playing widget; without it the widget silently stays hidden
 
 ## Project Context
 
