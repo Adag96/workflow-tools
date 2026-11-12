@@ -141,3 +141,10 @@ Each lesson follows this structure:
 - **What happened**: display_watcher's trim pass moved windows off "extra" spaces and destroyed them. It runs on system_woke too, so desktops Adam added (e.g. via the bar's "+") were wiped after every sleep, piling their windows onto the first space.
 - **Root cause**: Space targets (3 laptop / 6 external / 5 standalone) were treated as exact counts instead of defaults.
 - **Rule**: Targets are minimums for creation; the trim pass may only destroy *empty* spaces (`query --windows --space` length 0, which includes minimized/hidden). A space with windows is intentional — keep it, even if that leaves the display above target.
+
+### bounding_rects has one entry per display — never take `[0]`
+- **Date**: 2026-11-12
+- **Category**: Sketchybar
+- **What happened**: On the MacBook + external monitor, the Gamify menu opened and closed itself a second later. The close-on-leave check (gamify_menu.sh) took `[.bounding_rects[]][0]` (display-1's pill) and tested the cursor's y against `0..bar height`, so a cursor on the external display's bar (global y −203) always read as "outside". The swipe helper and media_hover.sh had the same bug.
+- **Root cause**: `bounding_rects` is keyed `display-N`, in global coordinates with a top-left origin (y = primary screen height − NSEvent y). A display that isn't showing the item (e.g. a popup open on another display) reports origin −9999.
+- **Rule**: Hit-test the cursor against every display's rect, using each rect's own y-range, and skip −9999 entries. Test multi-display with a compiled `CGWarpMouseCursorPosition` helper. Let animations settle (~1s) between steps, and remember a script-run `toggle` opens the popup on the *focused* display, not the one under the cursor.

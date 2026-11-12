@@ -11,16 +11,18 @@
 // It exits when the menu closes (checked every second) — gamify_menu.sh also kills it.
 //
 // Build: swiftc -O gamify_scroll.swift -o <bin>   (items/gamify.sh does this on load)
-// Usage: gamify_scroll <menu script> <pill x0> <pill x1> <bar height>
+// Usage: gamify_scroll <menu script> <x0 x1 y0 y1>...   (the pill on each display: global,
+//        top-left origin, as in sketchybar's bounding_rects)
 
 import AppKit
 
 let args = CommandLine.arguments
-guard args.count == 5, let x0 = Double(args[2]), let x1 = Double(args[3]),
-      let barH = Double(args[4]) else {
-    FileHandle.standardError.write("usage: gamify_scroll <menu script> <x0> <x1> <bar height>\n".data(using: .utf8)!)
+let nums = args.dropFirst(2).compactMap(Double.init)
+guard args.count >= 6, nums.count == args.count - 2, nums.count % 4 == 0 else {
+    FileHandle.standardError.write("usage: gamify_scroll <menu script> <x0 x1 y0 y1>...\n".data(using: .utf8)!)
     exit(2)
 }
+let boxes = stride(from: 0, to: nums.count, by: 4).map { Array(nums[$0..<$0 + 4]) }
 let script = args[1]
 let STEP = 28.0           // points of horizontal travel per notch (trackpad)
 let LINE = 10.0           // a non-precise wheel "line" counts as this many points
@@ -54,8 +56,8 @@ func drain() {
 
 func overPill() -> Bool {
     let p = NSEvent.mouseLocation                         // bottom-left origin
-    let y = NSScreen.screens[0].frame.height - p.y        // → bar coordinates
-    return p.x >= x0 && p.x <= x1 && y >= 0 && y <= barH
+    let y = NSScreen.screens[0].frame.height - p.y        // → top-left origin
+    return boxes.contains { p.x >= $0[0] && p.x <= $0[1] && y >= $0[2] && y <= $0[3] }
 }
 
 let app = NSApplication.shared

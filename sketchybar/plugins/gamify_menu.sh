@@ -101,10 +101,10 @@ open_menu() {
 start_spinner() {   # horizontal swipe → spin (sketchybar can't see horizontal scroll)
   stop_spinner
   [ -x "$SPINNER" ] || return 0
-  local span
-  span=$(sketchybar --query gamify_bracket | jq -r '[.bounding_rects[]][0] | "\(.origin[0]) \(.origin[0] + .size[0])"')
+  local boxes   # the pill on every display: x0 x1 y0 y1 (global, top-left origin)
+  boxes=$(sketchybar --query gamify_bracket | jq -r '[.bounding_rects[] | .origin[0], .origin[0] + .size[0], .origin[1], .origin[1] + .size[1]] | map(tostring) | join(" ")')
   # shellcheck disable=SC2086
-  "$SPINNER" "$0" $span "${HEIGHT_L1:-44}" >/dev/null 2>&1 &
+  "$SPINNER" "$0" $boxes >/dev/null 2>&1 &
   echo $! > "$SPINNER_PID"
 }
 stop_spinner() {
@@ -122,22 +122,26 @@ close_menu() {
   sketchybar --animate tanh $STRETCH $STEP_CLOSED
 }
 
-# Is the mouse over the pill or the tag list? (one box: the pill's x-range, from the
-# bar's top down to the last tag row; bar coordinates, top-left origin)
+# Is the mouse over the pill or the tag list? One box per display the bar is on: the
+# pill's x-range, from the bar's top down to the last tag row where the list is shown.
+# Rects are global, top-left origin (a display that doesn't show the item reports -9999).
 cursor_in_menu() {
-  local box pos last bottom
-  box=$(sketchybar --query gamify_bracket | jq -r '[.bounding_rects[]][0] | "\(.origin[0]) \(.origin[0] + .size[0])"')
+  local boxes pos last tag='{}'
   last=$(sketchybar --query gamify.1 | jq -r '.popup.items | last // empty')
-  bottom=$( [ -n "$last" ] && sketchybar --query "$last" | jq -r '[.bounding_rects[]][0] | .origin[1] + .size[1]')
+  [ -n "$last" ] && tag=$(sketchybar --query "$last" | jq -c '.bounding_rects')
+  boxes=$(sketchybar --query gamify_bracket | jq -r --argjson tag "$tag" '
+    .bounding_rects | to_entries[] | .value as $r | ($tag[.key] // null) as $t
+    | [$r.origin[0], $r.origin[0] + $r.size[0], $r.origin[1],
+       (if $t != null and $t.origin[0] > -9999 then $t.origin[1] + $t.size[1]
+        else $r.origin[1] + $r.size[1] end)] | @tsv')
   pos=$(perl -e 'alarm 2; exec @ARGV' osascript -l JavaScript -e \
     'ObjC.import("AppKit"); var p = $.NSEvent.mouseLocation;
      var h = $.NSScreen.screens.objectAtIndex(0).frame.size.height;
      Math.round(p.x) + " " + Math.round(h - p.y)' 2>/dev/null)
   [ -n "$pos" ] || return 1
-  awk -v b="$box" -v p="$pos" -v bot="${bottom:-${HEIGHT_L1:-44}}" 'BEGIN {
-    split(b, x, " "); split(p, m, " ")
-    exit !(m[1] >= x[1] && m[1] <= x[2] && m[2] >= 0 && m[2] <= bot)
-  }'
+  echo "$boxes" | awk -v p="$pos" 'BEGIN { split(p, m, " ") }
+    m[1] >= $1 && m[1] <= $2 && m[2] >= $3 && m[2] <= $4 { hit = 1 }
+    END { exit !hit }'
 }
 
 case "${1:-$SENDER}" in

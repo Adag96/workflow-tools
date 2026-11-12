@@ -24,21 +24,19 @@ is_button() { case " $BUTTONS " in *" $1 "*) return 0 ;; esac; return 1; }
 expanded()  { [ "$(sketchybar --query media.play | jq -r '.icon.width')" -gt 0 ] 2>/dev/null; }
 cancel_watch() { [ -f "$WATCH" ] && kill "$(cat "$WATCH")" 2>/dev/null; rm -f "$WATCH"; }
 
-# Is the mouse inside the media pill? (bar coordinates: top-left origin)
+# Is the mouse inside the media pill on any display? (global coords, top-left origin)
 cursor_in_pill() {
-  local rect pos
-  rect=$(sketchybar --query media_bracket | jq -r '[.bounding_rects[]][0] | "\(.origin[0]) \(.size[0])"')
+  local boxes pos
+  boxes=$(sketchybar --query media_bracket | jq -r '.bounding_rects[] | [.origin[0], .origin[0] + .size[0], .origin[1], .origin[1] + .size[1]] | @tsv')
   # osascript can hang on stalled Apple Events: alarm-killed after 2s (→ treated as outside)
   pos=$(perl -e 'alarm 2; exec @ARGV' osascript -l JavaScript -e \
     'ObjC.import("AppKit"); var p = $.NSEvent.mouseLocation;
      var h = $.NSScreen.screens.objectAtIndex(0).frame.size.height;
      Math.round(p.x) + " " + Math.round(h - p.y)' 2>/dev/null)
   [ -n "$pos" ] || return 1
-  # shellcheck disable=SC2086
-  awk -v r="$rect" -v p="$pos" -v bh="$BAR_H" 'BEGIN {
-    split(r, a, " "); split(p, m, " ")
-    exit !(m[1] >= a[1] && m[1] <= a[1] + a[2] && m[2] >= 0 && m[2] <= bh)
-  }'
+  echo "$boxes" | awk -v p="$pos" 'BEGIN { split(p, m, " ") }
+    m[1] >= $1 && m[1] <= $2 && m[2] >= $3 && m[2] <= $4 { hit = 1 }
+    END { exit !hit }'
 }
 
 state_args() {   # $1 = expanded|collapsed → one sketchybar argument list for everything
