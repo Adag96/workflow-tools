@@ -148,3 +148,10 @@ Each lesson follows this structure:
 - **What happened**: On the MacBook + external monitor, the Gamify menu opened and closed itself a second later. The close-on-leave check (gamify_menu.sh) took `[.bounding_rects[]][0]` (display-1's pill) and tested the cursor's y against `0..bar height`, so a cursor on the external display's bar (global y −203) always read as "outside". The swipe helper and media_hover.sh had the same bug.
 - **Root cause**: `bounding_rects` is keyed `display-N`, in global coordinates with a top-left origin (y = primary screen height − NSEvent y). A display that isn't showing the item (e.g. a popup open on another display) reports origin −9999.
 - **Rule**: Hit-test the cursor against every display's rect, using each rect's own y-range, and skip −9999 entries. Test multi-display with a compiled `CGWarpMouseCursorPosition` helper. Let animations settle (~1s) between steps, and remember a script-run `toggle` opens the popup on the *focused* display, not the one under the cursor.
+
+### Don't un-float windows you didn't float
+- **Date**: 2026-11-17
+- **Category**: Yabai
+- **What happened**: Blitzit (`manage=off` rule) started getting tiled into the bsp layout. move_window_to_display.sh toggled float on *any* window that was floating after a cross-display move, to "re-insert" drag-floated windows — that also caught rule-unmanaged and user-floated windows.
+- **Root cause**: Post-move floating state was checked without comparing to pre-move state. Also, once a `manage=off` window is tiled, `--toggle float` silently no-ops on it.
+- **Rule**: Only re-tile a window if it was tiled *before* the action. To restore a rule-unmanaged window that got tiled, use `yabai -m rule --apply <rule-index>` (see `rule --list`), not `--toggle float`.

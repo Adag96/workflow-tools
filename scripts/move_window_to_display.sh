@@ -33,6 +33,7 @@ fi
   # Get window info
   win_info=$(yabai -m query --windows --window "$WINDOW_ID" 2>/dev/null) || exit 0
   win_display=$(echo "$win_info" | jq -r '.display')
+  was_floating=$(echo "$win_info" | jq -r '."is-floating"')
 
   # Use mouse display as the target (most reliable for all layout modes)
   mouse_display=$(yabai -m query --displays --display mouse 2>/dev/null | jq -r '.index' 2>/dev/null)
@@ -53,9 +54,11 @@ fi
   if [ "$mouse_display" != "$win_display" ]; then
     touch "$LOCK_FILE"
     yabai -m window "$WINDOW_ID" --display "$mouse_display"
-    # Re-insert into BSP layout if the window became floating from the drag
+    # Re-insert into BSP layout if the window became floating from the drag.
+    # Skip windows that were already floating (manage=off rules, user-floated) —
+    # toggling those would force them into the tiled layout.
     is_floating=$(yabai -m query --windows --window "$WINDOW_ID" 2>/dev/null | jq -r '."is-floating"')
-    if [ "$is_floating" = "true" ]; then
+    if [ "$was_floating" = "false" ] && [ "$is_floating" = "true" ]; then
       yabai -m window "$WINDOW_ID" --toggle float
     fi
     yabai -m window "$WINDOW_ID" --focus
