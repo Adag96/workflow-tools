@@ -44,7 +44,6 @@ DEFAULT_DATA = {
         {'id': 1, 'name': 'Sit-ups', 'emoji': '\U0001f4aa', 'perCredit': 4, 'credits': 1, 'counted': True}
     ],
     'tags': [],
-    'consecutiveRedemptions': {},
     'minutesFocusedToday': 0,
     'lastSessionDate': None,
     'settings': {

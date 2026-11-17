@@ -15,7 +15,6 @@ import json
 import os
 import socket
 import struct
-from datetime import datetime
 
 import gamify_store as store
 
@@ -107,13 +106,6 @@ def handle(msg):
                 raise InsufficientCredits()
             data['balance'] = balance - cost
             data['history'].insert(0, msg['entry'])
-            # Track consecutive redemptions for escalating cost
-            reward_id = msg.get('rewardId')
-            if reward_id is not None:
-                consec = data.get('consecutiveRedemptions', {})
-                today = datetime.now().strftime('%Y-%m-%d')
-                consec[str(reward_id)] = {'lastDate': today, 'streak': msg.get('streak', 0)}
-                data['consecutiveRedemptions'] = consec
             return {'success': True, 'newBalance': data['balance']}
 
         if action == 'logSpend':

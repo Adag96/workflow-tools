@@ -406,23 +406,7 @@ function renderRewards() {
       const isTimed = r.mode === 'timed';
       const debtAllowed = state.settings?.allowDebt || false;
 
-      // Consecutive day escalation (only for rewards with escalation enabled)
-      let streak = 0;
-      let effectiveCost = r.cost;
-      if (r.consecutiveEscalation && !isTimed) {
-        const consec = state.consecutiveRedemptions || {};
-        const tracking = consec[String(r.id)];
-        const today = new Date().toISOString().slice(0, 10);
-        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-        if (tracking) {
-          if (tracking.lastDate === today) {
-            streak = tracking.streak;
-          } else if (tracking.lastDate === yesterday) {
-            streak = tracking.streak + 1;
-          }
-        }
-        effectiveCost = Math.round(r.cost * Math.pow(1.1, streak));
-      }
+      const { streak, cost: effectiveCost } = escalatedCost(state.history, r);
 
       const canAfford = state.balance >= effectiveCost || (debtAllowed && !isTimed);
       const canStartTimed = isTimed && (state.balance >= r.cost || debtAllowed);
@@ -458,20 +442,7 @@ function renderRewards() {
   list.querySelectorAll('.redeem-btn').forEach(btn => {
     btn.addEventListener('click', async () => {
       const reward = state.rewards.find(r => r.id === parseInt(btn.dataset.id));
-      // Compute escalated cost for confirm dialog
-      let displayCost = reward.cost;
-      if (reward.consecutiveEscalation) {
-        const consec = state.consecutiveRedemptions || {};
-        const tracking = consec[String(reward.id)];
-        const today = new Date().toISOString().slice(0, 10);
-        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-        let streak = 0;
-        if (tracking) {
-          if (tracking.lastDate === today) streak = tracking.streak;
-          else if (tracking.lastDate === yesterday) streak = tracking.streak + 1;
-        }
-        displayCost = Math.round(reward.cost * Math.pow(1.1, streak));
-      }
+      const displayCost = escalatedCost(state.history, reward).cost;
       if (confirm(`Redeem "${reward.name}" for ${displayCost} FC?`)) {
         const result = await chrome.runtime.sendMessage({ action: 'redeem', rewardId: reward.id });
         if (result?.error) {
@@ -770,7 +741,9 @@ function setupRewardModal() {
       const mins = parseInt(logMinutesInput.value) || 0;
       logCostDisplay.textContent = mins * reward.cost;
     } else {
-      logCostDisplay.textContent = reward.cost;
+      const [y, m, d] = logDateInput.value.split('-').map(Number);
+      const date = y ? new Date(y, m - 1, d) : new Date();
+      logCostDisplay.textContent = escalatedCost(state.history, reward, date).cost;
     }
   }
 
@@ -786,6 +759,7 @@ function setupRewardModal() {
   });
 
   logMinutesInput.addEventListener('input', updateLogCost);
+  logDateInput.addEventListener('change', updateLogCost);
 
   document.getElementById('btn-log-reward').addEventListener('click', () => {
     // Populate select sorted by tier then cost
@@ -844,9 +818,12 @@ function setupRewardModal() {
       return;
     }
 
+    if (!timedMinutes) amount = escalatedCost(state.history, reward, new Date(timestamp)).cost;
+
     const entry = {
       type: 'spend',
       amount,
+      rewardId: reward.id,
       rewardName: reward.name,
       rewardEmoji: reward.emoji,
       timestamp
@@ -1537,10 +1514,6 @@ function setupSettings() {
 }
 
 // Helpers
-function localDateStr(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-}
-
 function setRingOffset(el, value, mode) {
   const modeChanged = mode && mode !== lastRingMode;
   if (mode) lastRingMode = mode;

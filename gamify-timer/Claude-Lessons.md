@@ -130,3 +130,25 @@ during that window permanently replaced the real data.
    back to defaults and save them.
 2. Recovery: Dropbox version history on data.json (dropbox.com → file → Version history)
    holds the pre-wipe version. The `data.json.bak-*` files are older manual snapshots.
+
+## 2026-11-17 — Consecutive-day escalation ignored "Log Past Reward" entries
+
+**Category:** Credit rules / data model
+
+**What happened:** Day Off (escalating reward) was charged a flat 400 for a 14-day run,
+because most days were logged late via Log Past Reward.
+
+**Root cause:** Escalation read a separate `consecutiveRedemptions` tracker that only the
+live `redeem` path updated (and it compared a local-date `lastDate` against UTC dates).
+Backdated `logSpend` entries never touched it, and a live redeem after a logged day reset it.
+
+**Rules:**
+1. Escalation is derived from history only (`escalation.js` → `escalatedCost`, shared by
+   popup and background). Never reintroduce a side tracker for a rule history can answer.
+2. Rule: +12.5% of base per consecutive prior day, capped at 3 steps (400→450→500→550).
+   Uncapped 1.1^n compounding made planned vacations cost thousands; the cap is intentional.
+3. A backfilled day doesn't re-price later entries already logged — log missed days oldest-first.
+4. On 2026-11-17 only the Oct 29 – Nov 11 run was re-priced to this rule (+1,800 FC); older
+   runs keep their original charges. Backup at `data.json.bak-2026-11-17-pre-escalation-catchup`.
+5. "Catch me up" on a data correction is ambiguous: confirm the date range before writing.
+   I first re-priced all history back to May, which Adam didn't want, and had to revert it.

@@ -1,5 +1,7 @@
 // Background service worker — handles timer logic and native messaging for shared data
 
+importScripts('escalation.js');
+
 const HOST_NAME = 'com.gamifytimer.host';
 
 
@@ -82,7 +84,6 @@ async function handleMessage(msg) {
         rewards: shared.rewards,
         activities: shared.activities || [],
         tags: shared.tags || [],
-        consecutiveRedemptions: shared.consecutiveRedemptions || {},
         minutesFocusedToday: shared.minutesFocusedToday || 0,
         lastSessionDate: shared.lastSessionDate || null,
         settings: shared.settings || {}
@@ -96,27 +97,12 @@ async function handleMessage(msg) {
       const reward = shared.rewards.find(r => r.id === msg.rewardId);
       if (!reward) return { error: 'Reward not found' };
 
-      // Calculate consecutive streak and escalated cost (only for rewards with escalation enabled)
-      let streak = 0;
-      let effectiveCost = reward.cost;
-      if (reward.consecutiveEscalation) {
-        const consec = shared.consecutiveRedemptions || {};
-        const tracking = consec[String(reward.id)];
-        const today = new Date().toISOString().slice(0, 10);
-        const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
-        if (tracking) {
-          if (tracking.lastDate === today) {
-            streak = tracking.streak;
-          } else if (tracking.lastDate === yesterday) {
-            streak = tracking.streak + 1;
-          }
-        }
-        effectiveCost = Math.round(reward.cost * Math.pow(1.1, streak));
-      }
+      const { cost: effectiveCost } = escalatedCost(shared.history, reward);
 
       const entry = {
         type: 'spend',
         amount: effectiveCost,
+        rewardId: reward.id,
         rewardName: reward.name,
         rewardEmoji: reward.emoji,
         timestamp: Date.now()
@@ -126,8 +112,6 @@ async function handleMessage(msg) {
         action: 'spendCredits',
         amount: effectiveCost,
         allowDebt: settings?.allowDebt || false,
-        rewardId: reward.id,
-        streak,
         entry
       });
 
@@ -237,6 +221,12 @@ async function handleMessage(msg) {
     case 'logReward': {
       const shared = await getSharedData();
       const settings = shared.settings || {};
+      // Price escalating rewards against fresh history for the entry's own date
+      const reward = shared.rewards.find(r => r.id === msg.entry.rewardId);
+      if (reward?.consecutiveEscalation && reward.mode !== 'timed') {
+        msg.amount = msg.entry.amount =
+          escalatedCost(shared.history, reward, new Date(msg.entry.timestamp)).cost;
+      }
       const result = await nativeSend({
         action: 'logSpend',
         amount: msg.amount,
