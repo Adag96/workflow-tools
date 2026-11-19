@@ -21,7 +21,7 @@ import os
 import tempfile
 import time
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timedelta
 
 DATA_FILE = os.environ.get(
     'GAMIFY_DATA_FILE',
@@ -217,3 +217,58 @@ def focus_award(session, data, today, now_ms):
         'timestamp': now_ms,
         'sessionId': session.get('sessionId'),
     }
+
+
+# ── Focus report (read-only; used by `gamifyctl report`) ───────────────────────
+
+def _fmt_minutes(m):
+    h, m = divmod(m, 60)
+    return f'{h}h{m:02d}m' if h else f'{m}m'
+
+
+def focus_report(history, since=None, today=None, detail_days=7):
+    """Plain-text summary of completed focus sessions, for agents to read cheaply.
+
+    Covers `since` (a date) through `today`, and always at least the last `detail_days`
+    days. Those recent days list every session; older days collapse to per-tag totals.
+    Start times are approximate (end time minus length; pauses aren't recorded)."""
+    today = today or datetime.now().date()
+    recent_start = today - timedelta(days=detail_days - 1)
+    start = min(since, recent_start) if since else recent_start
+
+    sessions = []                                   # (end datetime, tag, minutes)
+    for e in history:
+        if e.get('type') != 'earn' or not e.get('sessionMinutes') or not e.get('timestamp'):
+            continue                                # spends and activity credits aren't focus time
+        end = datetime.fromtimestamp(e['timestamp'] / 1000)
+        if start <= end.date() <= today:
+            sessions.append((end, e.get('tag') or 'untagged', e['sessionMinutes']))
+    sessions.sort()
+
+    def tag_totals(items):
+        totals = {}
+        for _, tag, minutes in items:
+            totals[tag] = totals.get(tag, 0) + minutes
+        return ' · '.join(f'{t} {_fmt_minutes(m)}' for t, m in sorted(totals.items(), key=lambda kv: -kv[1]))
+
+    lines = [f'Gamify focus sessions, {start} to {today}',
+             f'Totals: {tag_totals(sessions) or "none"}']
+    by_day = {}
+    for s in sessions:
+        by_day.setdefault(s[0].date(), []).append(s)
+
+    older = [d for d in by_day if d < recent_start]
+    if older:
+        lines += ['', f'Daily totals (before {recent_start}):']
+        lines += [f'  {d} {d:%a}  {tag_totals(by_day[d])}' for d in sorted(older)]
+
+    lines += ['', f'Sessions (last {detail_days} days):']
+    recent = [d for d in by_day if d >= recent_start]
+    for d in sorted(recent):
+        lines.append(f'  {d} {d:%a}')
+        for end, tag, minutes in by_day[d]:
+            begin = end - timedelta(minutes=minutes)
+            lines.append(f'    {begin:%H:%M}-{end:%H:%M}  {tag:<9}{_fmt_minutes(minutes)}')
+    if not recent:
+        lines.append('  none')
+    return '\n'.join(lines)

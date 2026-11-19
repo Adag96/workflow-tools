@@ -152,5 +152,31 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(data['balance'], 120)
 
 
+class FocusReportTests(unittest.TestCase):
+    def test_recent_sessions_in_full_older_days_as_totals(self):
+        from datetime import date, datetime
+        def at(y, mo, d, h, mi):
+            return int(datetime(y, mo, d, h, mi).timestamp() * 1000)
+        history = [
+            {'type': 'earn', 'amount': 9, 'sessionMinutes': 30, 'tag': 'SEASON', 'timestamp': at(2026, 11, 19, 20, 0)},
+            {'type': 'spend', 'amount': -20, 'rewardName': 'X', 'timestamp': at(2026, 11, 19, 21, 0)},
+            {'type': 'earn', 'amount': 1, 'activityName': 'Sit-ups', 'timestamp': at(2026, 11, 18, 9, 0)},
+            {'type': 'earn', 'amount': 90, 'sessionMinutes': 60, 'tag': 'UJAM', 'timestamp': at(2026, 11, 2, 11, 0)},
+            {'type': 'earn', 'amount': 90, 'sessionMinutes': 90, 'tag': 'UJAM', 'timestamp': at(2026, 11, 2, 15, 0)},
+            {'type': 'earn', 'amount': 9, 'sessionMinutes': 25, 'tag': None, 'timestamp': at(2026, 10, 1, 9, 0)},
+        ]
+        out = store.focus_report(history, since=date(2026, 11, 1), today=date(2026, 11, 19))
+        self.assertIn('2026-11-01 to 2026-11-19', out)
+        self.assertIn('Totals: UJAM 2h30m · SEASON 30m', out)         # spends/activities ignored
+        self.assertIn('2026-11-02 Mon  UJAM 2h30m', out)              # older day → totals only
+        self.assertIn('19:30-20:00  SEASON   30m', out)               # recent day → each session
+        self.assertNotIn('untagged', out)                             # before the window
+
+    def test_always_covers_last_seven_days(self):
+        from datetime import date
+        out = store.focus_report([], since=date(2026, 11, 18), today=date(2026, 11, 19))
+        self.assertIn('2026-11-13 to 2026-11-19', out)
+
+
 if __name__ == '__main__':
     unittest.main(verbosity=2)

@@ -6,6 +6,8 @@
   gamifyctl rest <minutes>           start a rest
   gamifyctl pause | resume | toggle | cancel
   gamifyctl tags                     the tags (JSON list: name, color, multiplier)
+  gamifyctl report [--since DATE]    focus sessions since DATE (YYYY-MM-DD), at least the
+                                     last 7 days: recent sessions in full, older days as totals
 """
 import sys
 sys.dont_write_bytecode = True
@@ -37,6 +39,22 @@ def main(argv):
     if cmd == 'tags':                  # read straight from data.json (no engine needed)
         import gamify_store as store
         print(json.dumps(store.read_data().get('tags', []), ensure_ascii=False))
+        return 0
+    if cmd == 'report':                # read straight from data.json (no engine needed)
+        import gamify_store as store
+        from datetime import datetime
+        since = None
+        if rest[:1] == ['--since'] and len(rest) == 2:
+            try:
+                since = datetime.strptime(rest[1], '%Y-%m-%d').date()
+            except ValueError:
+                print(f'bad date {rest[1]!r}, expected YYYY-MM-DD'); return 2
+        elif rest:
+            print(__doc__.strip()); return 2
+        try:
+            print(store.focus_report(store.read_data().get('history', []), since=since))
+        except Exception as e:
+            print(f'Gamify data unreadable: {e}'); return 1
         return 0
     if cmd == 'start':
         msg = {'action': 'start', 'minutes': int(rest[0]) if rest else 25, 'tag': ' '.join(rest[1:]) or None}
