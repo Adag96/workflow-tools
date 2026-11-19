@@ -155,3 +155,10 @@ Each lesson follows this structure:
 - **What happened**: Blitzit (`manage=off` rule) started getting tiled into the bsp layout. move_window_to_display.sh toggled float on *any* window that was floating after a cross-display move, to "re-insert" drag-floated windows — that also caught rule-unmanaged and user-floated windows.
 - **Root cause**: Post-move floating state was checked without comparing to pre-move state. Also, once a `manage=off` window is tiled, `--toggle float` silently no-ops on it.
 - **Rule**: Only re-tile a window if it was tiled *before* the action. To restore a rule-unmanaged window that got tiled, use `yabai -m rule --apply <rule-index>` (see `rule --list`), not `--toggle float`.
+
+### Syncing the app-font repo doesn't update the installed font
+- **Date**: 2026-11-17
+- **Category**: Sketchybar
+- **What happened**: Asana (and any app added since Feb 2025) showed no icon in the spaces strip. `icon_map_fn.sh` mapped it to `:asana:`, but `~/Library/Fonts/sketchybar-app-font.ttf` was a Feb 2025 build with 310 glyphs vs. 707 SVGs in the synced repo.
+- **Root cause**: The font is built per machine — `dist/` is gitignored and the TTF installs to `~/Library/Fonts`. The Nov 4 upstream sync (v3.0.20) was built on one machine; pulling on the MacBook brought the new SVGs and icon map but not the font, so new ligatures had no glyph to render.
+- **Rule**: After pulling any app-font change onto a machine (or adding a new SVG), run `pnpm run build:install ../plugins/icon_map_fn.sh` from `sketchybar/sketchybar-app-font`, then `sketchybar --reload`. If one app icon is missing while its map entry exists, check the installed TTF's date first.
