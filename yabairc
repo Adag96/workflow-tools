@@ -58,3 +58,13 @@ yabai -m signal --add event=space_destroyed action="$HOME/workflow-tools/sketchy
 
 # Move windows to the display they are dragged to
 yabai -m signal --add event=window_moved action="$HOME/workflow-tools/scripts/move_window_to_display.sh \$YABAI_WINDOW_ID"
+
+# Login race: if sketchybar loaded before yabai was up, spaces.sh fell back to
+# static spaces without the −/+ buttons. Reload the bar once now that yabai is
+# answering — after any in-progress config load finishes (never overlap reloads).
+(
+    sleep 2
+    for _ in 1 2 3 4 5 6 7 8 9 10; do pgrep -f sketchybarrc >/dev/null || break; sleep 1; done
+    sketchybar --query bar 2>/dev/null | jq -e '.items | map(select(startswith("space_add."))) | length == 0' >/dev/null \
+        && sketchybar --reload
+) &
